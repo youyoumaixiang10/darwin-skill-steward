@@ -1,0 +1,4 @@
+interface:
+  display_name: "Darwin"
+  short_description: "Audit Skills with evidence and approval"
+  default_prompt: "Audit my Skills and recommend only evidence-backed actions."

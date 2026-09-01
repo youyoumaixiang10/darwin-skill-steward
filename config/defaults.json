@@ -1,0 +1,14 @@
+{
+  "schema_version": 1,
+  "raw_evidence_retention_days": 30,
+  "capture_mode": "redacted",
+  "max_evidence_chars": 4000,
+  "health": {
+    "minimum_known_outcomes": 5,
+    "minimum_failures_for_evolve": 3,
+    "failure_rate_for_evolve": 0.3,
+    "failure_rate_for_keep": 0.2,
+    "overlap_threshold": 0.82,
+    "archive_inactivity_days": 90
+  }
+}

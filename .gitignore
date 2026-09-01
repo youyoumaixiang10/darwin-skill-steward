@@ -1,0 +1,15 @@
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.darwin-data/
+.darwin-test/
+
+# Runtime state belongs in PLUGIN_DATA and must not be published.
+registry.json
+events.jsonl
+health-history.jsonl
+archive-index.json
+approvals/
+archive/
+evidence/
+evolution/

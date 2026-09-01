@@ -1,0 +1,34 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://darwin.local/schemas/registry.schema.json",
+  "title": "Darwin Skill Registry",
+  "type": "object",
+  "required": ["schema_version", "generated_at", "scan_roots", "skills"],
+  "properties": {
+    "schema_version": {"const": 1},
+    "generated_at": {"type": "string", "format": "date-time"},
+    "scan_roots": {"type": "array", "items": {"type": "string"}},
+    "skills": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["record_id", "skill_id", "path", "origin", "manageable", "protected", "content_sha256", "tree_sha256"],
+        "properties": {
+          "record_id": {"type": "string"},
+          "skill_id": {"type": "string"},
+          "description": {"type": "string"},
+          "path": {"type": "string"},
+          "origin": {"enum": ["USER", "REPOSITORY", "SYSTEM", "OFFICIAL_PLUGIN", "THIRD_PARTY_PLUGIN"]},
+          "manageable": {"type": "boolean"},
+          "managed": {"type": "boolean"},
+          "protected": {"type": "boolean"},
+          "content_sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+          "tree_sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+          "status": {"enum": ["DISCOVERED", "ARCHIVED"]}
+        },
+        "additionalProperties": true
+      }
+    }
+  },
+  "additionalProperties": false
+}

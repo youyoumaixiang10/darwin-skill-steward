@@ -1,0 +1,20 @@
+{
+  "name": "darwin-for-codex",
+  "version": "0.1.0",
+  "description": "Evidence-aware Skill inventory, health recommendations, and reversible archival with human approval.",
+  "author": {
+    "name": "Darwin for Codex contributors"
+  },
+  "license": "MIT",
+  "keywords": ["skills", "governance", "telemetry", "health", "archive"],
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "Darwin for Codex",
+    "shortDescription": "Audit Skills with evidence and human approval.",
+    "longDescription": "Observe Skill-related evidence, maintain a protected registry, recommend KEEP, OBSERVE, ARCHIVE, MERGE, or EVOLVE, and perform only reversible user-approved archival.",
+    "developerName": "Darwin for Codex contributors",
+    "category": "Productivity",
+    "capabilities": ["Interactive", "Write"],
+    "defaultPrompt": "Audit my Skills and recommend only evidence-backed actions."
+  }
+}

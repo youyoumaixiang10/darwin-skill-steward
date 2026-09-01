@@ -1,0 +1,8 @@
+{
+  "description": "Darwin's local, passive lifecycle sensor. It records evidence but never blocks or continues a turn.",
+  "hooks": {
+    "UserPromptSubmit": [{"hooks": [{"type": "command", "command": "python3 \"$PLUGIN_ROOT/scripts/observe.py\"", "commandWindows": "powershell.exe -NoProfile -ExecutionPolicy Bypass -Command \"& (Join-Path $env:PLUGIN_ROOT 'scripts\\run-observer.ps1')\"", "timeout": 5, "async": true, "statusMessage": "Darwin is recording local evidence"}]}],
+    "Stop": [{"hooks": [{"type": "command", "command": "python3 \"$PLUGIN_ROOT/scripts/observe.py\"", "commandWindows": "powershell.exe -NoProfile -ExecutionPolicy Bypass -Command \"& (Join-Path $env:PLUGIN_ROOT 'scripts\\run-observer.ps1')\"", "timeout": 5, "async": true, "statusMessage": "Darwin is recording local evidence"}]}],
+    "SessionEnd": [{"hooks": [{"type": "command", "command": "python3 \"$PLUGIN_ROOT/scripts/observe.py\"", "commandWindows": "powershell.exe -NoProfile -ExecutionPolicy Bypass -Command \"& (Join-Path $env:PLUGIN_ROOT 'scripts\\run-observer.ps1')\"", "timeout": 3}]}]
+  }
+}
