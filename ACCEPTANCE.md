@@ -22,6 +22,13 @@ The suite verifies:
 - changed targets invalidate approval;
 - archive is reversible;
 - no permanent delete command exists;
+- candidate preparation leaves the live Skill unchanged;
+- a concrete proposal and reviewable diff are required before promotion;
+- changed or missing evaluation evidence blocks promotion;
+- candidate edits after evaluation invalidate the evaluation set;
+- dry-run or judge-only evidence cannot pass the promotion gate;
+- promotion requires deterministic, real full-test, and independent paired evidence;
+- promotion and rollback require separate exact approvals and hash checks;
 - manifest, Hook configuration, scripts, Schema files, and docs are present.
 
 ## Manual plugin acceptance
@@ -35,5 +42,8 @@ The suite verifies:
 7. Confirm official/system Skills show protected `KEEP`, and the report states that first-run usage is unknown.
 8. On a disposable user Skill, run `archive.py plan`. Confirm nothing moves before the exact approval phrase is returned.
 9. Approve, archive, create a restore plan, approve again, and confirm the original tree hash is restored.
+10. On a disposable Skill, prepare and edit a candidate. Confirm the live Skill is unchanged.
+11. Record the proposal, deterministic result, held-out full-test, and three paired results. Confirm dry-run-only evidence cannot produce a promotion plan.
+12. Plan promotion and inspect the generated `review.diff`. Approve promotion, then separately plan and approve rollback. Confirm the original tree hash is restored.
 
 Passing local unit tests proves structure and deterministic safeguards. It does not prove Hook trust UI behavior or real Skill invocation attribution; those require the manual new-task test above.

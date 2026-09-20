@@ -129,7 +129,9 @@ def exclusive_lock(path: Path, timeout: float = 1.0) -> Iterable[bool]:
 
 
 def append_event(data_dir: Path, event: dict[str, Any]) -> str:
-    initialize_data_dir(data_dir)
+    # The caller has already resolved the runtime data directory. Rewriting the
+    # PLUGIN_DATA locator from a sandboxed Hook can target a read-only path.
+    initialize_data_dir(data_dir, write_locator=False)
     event.setdefault("schema_version", SCHEMA_VERSION)
     event.setdefault("event_id", str(uuid.uuid4()))
     event.setdefault("timestamp", utc_now())

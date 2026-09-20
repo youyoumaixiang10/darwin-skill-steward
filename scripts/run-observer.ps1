@@ -20,10 +20,9 @@ if (-not $pythonPath) {
 }
 
 $observer = Join-Path $env:PLUGIN_ROOT "scripts\observe.py"
-$stdinText = [Console]::In.ReadToEnd()
 if ([IO.Path]::GetFileName($pythonPath) -ieq "py.exe") {
-    $stdinText | & $pythonPath -3 $observer
+    & $pythonPath -3 $observer
 } else {
-    $stdinText | & $pythonPath $observer
+    & $pythonPath $observer
 }
 exit $LASTEXITCODE

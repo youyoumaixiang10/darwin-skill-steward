@@ -5,12 +5,21 @@ from __future__ import annotations
 
 import json
 import sys
+from pathlib import Path
 
+ROOT = Path(__file__).resolve().parents[1]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
+from adapters.codex import CodexAdapter
 from telemetry import initialize_data_dir, prune_evidence, record_event, resolve_data_dir
 
 
 def observe(payload: dict) -> None:
-    data_dir = initialize_data_dir(resolve_data_dir())
+    # Hooks already receive PLUGIN_DATA. Avoid writing a separate locator from
+    # the sandboxed Hook process because that path may be intentionally read-only.
+    data_dir = initialize_data_dir(resolve_data_dir(), write_locator=False)
+    translated = CodexAdapter().translate_hook(payload)
     event_name = str(payload.get("hook_event_name", "Unknown"))
     common = {
         "session_id": payload.get("session_id"),
@@ -18,6 +27,8 @@ def observe(payload: dict) -> None:
         "cwd": payload.get("cwd"),
         "model": payload.get("model"),
         "hook_event_name": event_name,
+        "runtime_id": translated.runtime_id,
+        "skill_state": translated.skill_state,
     }
     if event_name == "UserPromptSubmit":
         record_event(

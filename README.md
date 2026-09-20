@@ -1,10 +1,14 @@
-# Darwin for Codex v0.1
+# Darwin for Codex v0.2
 
-Darwin is a conservative Skill asset manager for Codex:
+Darwin is a conservative, controlled Skill evolution system for Codex:
 
-`Observe -> Manage -> Recommend -> Human Approve`
+`Observe -> Diagnose -> Candidate -> Validate -> Human Approve -> Promote or Roll Back`
 
-It inventories Skills, keeps system/official assets protected, collects local evidence, generates `KEEP / OBSERVE / ARCHIVE / MERGE / EVOLVE` recommendations, and can perform a reversible archive only after explicit approval. It does not auto-evolve, auto-promote, or permanently delete Skills.
+It inventories Skills, keeps system/official assets protected, collects local evidence, and generates `KEEP / OBSERVE / ARCHIVE / MERGE / EVOLVE` recommendations. For EVOLVE, it edits and tests only an isolated candidate. Promotion and rollback both require separate exact human approval. It never permanently deletes Skills.
+
+## Cross-Agent architecture
+
+Darwin now separates runtime-independent governance from Agent-specific adapters. `darwin_core` owns the runtime contract, durable storage boundary, and evidence-gated promotion policy. `adapters/codex.py` is the first adapter and preserves the existing Codex discovery and Hook behavior. Claude Code/Cowork, WorkBuddy, and the Doubao client are intentionally listed as planned until their adapters and capability tests exist; see [the runtime capability matrix](docs/runtime-capability-matrix.md).
 
 ## Official capability review
 
@@ -34,6 +38,7 @@ darwin-for-codex/
 │   ├── registry.py
 │   ├── health.py
 │   ├── archive.py
+│   ├── evolution.py
 │   └── run-observer.ps1
 ├── config/defaults.json
 ├── schemas/
@@ -57,7 +62,7 @@ evidence/raw/YYYY-MM-DD/*.json     short-term text evidence
 evidence/spool/*.json              contention fallback
 approvals/*.json                   one-time action plans
 archive/<record-id>/<archive-id>/  reversible Skill archives
-evolution/                         reserved for recommendation dossiers
+evolution/<candidate-id>/          baseline, candidate, evaluations, promotion snapshot
 ```
 
 Event metadata contains hashes and lengths. Text evidence is redacted by default, capped at 4,000 characters, and expires after 30 days when pruning runs. Set `DARWIN_CAPTURE_MODE=off` to disable text capture or `full` to keep capped unredacted text locally. Review privacy implications before using `full`.
@@ -96,6 +101,12 @@ python scripts/archive.py execute --approval-id <id> --approval-text "APPROVE AR
 
 Restore requires a separate plan and approval. There is deliberately no delete command.
 
+## Controlled evolution
+
+`evolution.py prepare` copies one manageable Skill into an isolated candidate directory. The source remains unchanged while the agent edits and tests the candidate. Before promotion, `record-proposal` stores a concrete description of the candidate change. Promotion is blocked unless deterministic validation passes, at least one real held-out `full_test` favors the candidate, and at least three independent paired evaluators produce a strict `BETTER` majority.
+
+Dry runs and judge-only scores never pass the gate. Full and paired evaluations must be marked held-out and attach an evidence file, which Darwin copies and hashes inside the candidate record. Every required evaluation is tied to the exact candidate hash it tested, so later edits invalidate the evaluation set. `plan-promote` generates a unified `review.diff` and creates a one-time approval tied to the source, candidate, and review hashes. `execute-promote` rechecks those hashes and all evaluation evidence, preserves the live source as a rollback snapshot, and then installs the candidate. Rollback has a separate plan and exact approval.
+
 ## Evidence boundary
 
 - Hook prompt/stop events have `attribution_source=UNKNOWN` and `outcome=UNKNOWN`.
@@ -103,6 +114,6 @@ Restore requires a separate plan and approval. There is deliberately no delete c
 - `INFERRED` can support triage, never high-confidence health metrics.
 - Explicit outcomes link to the same Skill and turn; unlinked labels are ignored by health scoring.
 - `ARCHIVE` requires a dated complete-coverage window, sufficient inactivity, and an overlapping Skill with observed use or protected availability; missing logs alone are never enough.
-- `EVOLVE` is a recommendation only in v0.1.
+- `EVOLVE` opens an isolated candidate workflow; it never authorizes a live mutation by itself.
 
 See [the two-round design review](docs/DESIGN_REVIEW.md), [managed telemetry protocol](docs/MANAGED_SKILL_PROTOCOL.md), and [acceptance plan](ACCEPTANCE.md).

@@ -8,7 +8,7 @@
     "schema_version": {"const": 1},
     "approval_id": {"type": "string"},
     "status": {"enum": ["PENDING", "CONSUMED", "EXPIRED"]},
-    "action": {"enum": ["ARCHIVE", "RESTORE"]},
+    "action": {"enum": ["ARCHIVE", "RESTORE", "PROMOTE", "ROLLBACK_EVOLUTION"]},
     "required_approval_text": {"type": "string"},
     "target_tree_sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"}
   },

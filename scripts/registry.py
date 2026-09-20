@@ -10,8 +10,14 @@ import json
 import os
 from pathlib import Path
 import re
+import sys
 from typing import Any
 
+ROOT = Path(__file__).resolve().parents[1]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
+from adapters.codex import CodexAdapter
 from telemetry import atomic_write_json, initialize_data_dir, load_json, resolve_data_dir, utc_now
 
 
@@ -75,17 +81,11 @@ def classify_skill(path: Path) -> tuple[str, bool, str | None]:
     return "USER", True, None
 
 
-def discover_roots(cwd: Path, explicit: list[str], include_plugin_cache: bool) -> list[Path]:
-    candidates = [Path.home() / ".codex" / "skills", Path.home() / ".agents" / "skills"]
-    current = cwd.resolve()
-    while True:
-        candidates.append(current / ".agents" / "skills")
-        if current.parent == current:
-            break
-        current = current.parent
-    candidates.extend(Path(value).expanduser() for value in explicit)
-    if include_plugin_cache:
-        candidates.append(Path.home() / ".codex" / "plugins" / "cache")
+def discover_roots(
+    cwd: Path, explicit: list[str], include_plugin_cache: bool, home: Path | None = None
+) -> list[Path]:
+    adapter = CodexAdapter(home=home, cwd=cwd, include_plugin_cache=include_plugin_cache)
+    candidates = [*adapter.discovery_roots(), *(Path(value).expanduser() for value in explicit)]
     seen: set[str] = set()
     roots: list[Path] = []
     for candidate in candidates:
@@ -98,8 +98,6 @@ def discover_roots(cwd: Path, explicit: list[str], include_plugin_cache: bool) -
             seen.add(key)
             roots.append(resolved)
     return roots
-
-
 def build_record(skill_md: Path, previous: dict[str, Any] | None = None) -> dict[str, Any]:
     folder = skill_md.parent.resolve()
     metadata = parse_frontmatter(skill_md)
