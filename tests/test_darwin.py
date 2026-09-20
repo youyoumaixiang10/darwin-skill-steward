@@ -17,6 +17,7 @@ SCRIPTS = PLUGIN_ROOT / "scripts"
 sys.path.insert(0, str(SCRIPTS))
 
 import archive  # noqa: E402
+import evolution  # noqa: E402
 import health  # noqa: E402
 import observe  # noqa: E402
 import registry  # noqa: E402
@@ -301,6 +302,7 @@ class DarwinTestCase(unittest.TestCase):
             "scripts/registry.py",
             "scripts/health.py",
             "scripts/archive.py",
+            "scripts/evolution.py",
             "schemas/event.schema.json",
             "README.md",
             "ACCEPTANCE.md",
