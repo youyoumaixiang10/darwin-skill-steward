@@ -105,7 +105,7 @@ def prepare_candidate(
         raise SystemExit("An explicit human reason is required.")
     registry = load_registry(data_dir)
     skill = select_skill(registry, skill_name, skill_path)
-    source = ensure_archivable(skill, registry)
+    source = ensure_archivable(skill, registry, require_runtime_release=False)
     candidate_id = str(uuid.uuid4())
     root = data_dir / "evolution" / candidate_id
     baseline = root / "baseline"
@@ -253,7 +253,7 @@ def validate_live_target(data_dir: Path, manifest: dict[str, Any]) -> tuple[dict
     if len(matches) != 1:
         raise SystemExit("Registry target no longer resolves uniquely.")
     skill = matches[0]
-    source = ensure_archivable(skill, registry)
+    source = ensure_archivable(skill, registry, require_runtime_release=False)
     if os.path.normcase(str(source)) != os.path.normcase(str(Path(manifest["source_path"]).resolve())):
         raise SystemExit("Live Skill path changed after candidate preparation.")
     if tree_sha256(source) != manifest["source_tree_sha256"]:

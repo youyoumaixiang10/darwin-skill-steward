@@ -151,6 +151,8 @@ class DarwinTestCase(unittest.TestCase):
         new = make_skill(self.skills, "new-title", "new-title", "Marketing title workflow improved", repeated)
         result = self.scan()
         records = {item["skill_id"]: item for item in result["skills"]}
+        registry.set_runtime_dependency(records["old-title"], "NOT_REQUIRED")
+        telemetry.atomic_write_json(self.data / "registry.json", result)
         telemetry.record_event(
             self.data,
             "skill_invocation",
@@ -215,7 +217,7 @@ class DarwinTestCase(unittest.TestCase):
         self.assertEqual(item["evidence"]["HUMAN"]["status"], "EXPLICIT")
         self.assertEqual(item["evidence"]["EXPERIMENTAL"]["status"], "UNKNOWN")
 
-    def test_exact_duplicates_recommend_merge_not_archive(self) -> None:
+    def test_same_tree_duplicates_recommend_merge_not_archive(self) -> None:
         content = "---\nname: duplicate\ndescription: Same\n---\n\nSame body\n"
         for folder in ("one", "two"):
             target = self.skills / folder
@@ -247,8 +249,11 @@ class DarwinTestCase(unittest.TestCase):
 
     def test_archive_requires_exact_approval_and_is_reversible(self) -> None:
         source = make_skill(self.skills, "old", "old", "Old disposable skill")
-        self.scan()
+        scanned = self.scan()
+        registry.set_runtime_dependency(scanned["skills"][0], "NOT_REQUIRED")
+        telemetry.atomic_write_json(self.data / "registry.json", scanned)
         plan = archive.archive_plan(self.data, "old", None)
+        self.assertEqual(plan["target_tree_sha256"], registry.tree_sha256(source))
         with self.assertRaises(SystemExit):
             archive.archive_execute(self.data, plan["approval_id"], "yes")
         self.assertTrue(source.exists())
@@ -258,6 +263,7 @@ class DarwinTestCase(unittest.TestCase):
         self.assertTrue(Path(result["archive_path"]).exists())
 
         restore_plan = archive.restore_plan(self.data, result["archive_id"])
+        self.assertEqual(restore_plan["target_tree_sha256"], plan["target_tree_sha256"])
         restored = archive.restore_execute(
             self.data, restore_plan["approval_id"], restore_plan["required_user_reply"]
         )
@@ -266,7 +272,9 @@ class DarwinTestCase(unittest.TestCase):
 
     def test_target_change_invalidates_archive_approval(self) -> None:
         source = make_skill(self.skills, "mutable", "mutable", "Mutable skill")
-        self.scan()
+        scanned = self.scan()
+        registry.set_runtime_dependency(scanned["skills"][0], "NOT_REQUIRED")
+        telemetry.atomic_write_json(self.data / "registry.json", scanned)
         plan = archive.archive_plan(self.data, "mutable", None)
         (source / "note.txt").write_text("changed", encoding="utf-8")
         with self.assertRaises(SystemExit):
@@ -275,7 +283,9 @@ class DarwinTestCase(unittest.TestCase):
 
     def test_scan_preserves_archived_record_for_restore(self) -> None:
         make_skill(self.skills, "old", "old", "Old disposable skill")
-        self.scan()
+        scanned = self.scan()
+        registry.set_runtime_dependency(scanned["skills"][0], "NOT_REQUIRED")
+        telemetry.atomic_write_json(self.data / "registry.json", scanned)
         plan = archive.archive_plan(self.data, "old", None)
         result = archive.archive_execute(self.data, plan["approval_id"], plan["required_user_reply"])
         rescanned = self.scan()
@@ -285,6 +295,13 @@ class DarwinTestCase(unittest.TestCase):
         restore_plan = archive.restore_plan(self.data, result["archive_id"])
         archive.restore_execute(self.data, restore_plan["approval_id"], restore_plan["required_user_reply"])
         self.assertTrue((self.skills / "old").exists())
+
+    def test_archive_plan_requires_explicit_runtime_release(self) -> None:
+        source = make_skill(self.skills, "runtime-copy", "runtime-copy", "Still required")
+        self.scan()
+        with self.assertRaisesRegex(SystemExit, "runtime dependency"):
+            archive.archive_plan(self.data, "runtime-copy", None)
+        self.assertTrue(source.exists())
 
     def test_no_permanent_delete_command(self) -> None:
         parser = archive.build_parser()
@@ -303,6 +320,8 @@ class DarwinTestCase(unittest.TestCase):
             "scripts/health.py",
             "scripts/archive.py",
             "scripts/evolution.py",
+            "darwin_core/frontmatter.py",
+            "requirements.txt",
             "schemas/event.schema.json",
             "README.md",
             "ACCEPTANCE.md",

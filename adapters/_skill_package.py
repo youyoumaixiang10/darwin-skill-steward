@@ -9,6 +9,7 @@ import zipfile
 from pathlib import Path
 from typing import Iterable
 
+from darwin_core.frontmatter import FrontmatterResult, parse_frontmatter_file
 from darwin_core.models import RuntimeAsset
 
 
@@ -80,25 +81,21 @@ def read_skill(asset: RuntimeAsset) -> str:
     return skill_md.read_text(encoding="utf-8", errors="replace")
 
 
-def frontmatter_fields(asset: RuntimeAsset) -> dict[str, str]:
-    text = read_skill(asset)
-    if not text.startswith("---"):
-        return {}
-    lines = text.splitlines()
-    fields: dict[str, str] = {}
-    for line in lines[1:]:
-        if line.strip() == "---":
-            break
-        if ":" not in line or line[:1].isspace():
-            continue
-        key, value = line.split(":", 1)
-        fields[key.strip()] = value.strip().strip('"\'')
-    return fields
+def frontmatter_fields(asset: RuntimeAsset) -> FrontmatterResult:
+    skill_md = Path(asset.metadata.get("skill_md", Path(asset.path) / "SKILL.md"))
+    return parse_frontmatter_file(skill_md)
 
 
 def require_frontmatter(asset: RuntimeAsset, required: Iterable[str]) -> None:
-    fields = frontmatter_fields(asset)
-    missing = [name for name in required if not fields.get(name)]
+    result = frontmatter_fields(asset)
+    required_fields = tuple(dict.fromkeys(("name", "description", *required)))
+    missing = [
+        name
+        for name in required_fields
+        if not isinstance(result.fields.get(name), str) or not result.fields[name].strip()
+    ]
+    if result.parse_errors:
+        raise ValueError(f"{asset.runtime_id} package has invalid SKILL.md frontmatter: {'; '.join(result.parse_errors)}")
     if missing:
         raise ValueError(f"{asset.runtime_id} package requires SKILL.md fields: {', '.join(missing)}")
 

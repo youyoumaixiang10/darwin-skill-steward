@@ -21,6 +21,7 @@ from telemetry import (
     resolve_data_dir,
     utc_now,
 )
+from registry import runtime_release_matches
 
 
 HIGH_CONFIDENCE_ATTRIBUTION = {"PLATFORM", "MANAGED_SELF_REPORT", "MANUAL"}
@@ -57,15 +58,83 @@ def overlap_map(skills: list[dict[str, Any]], threshold: float) -> dict[str, lis
     token_cache = {item["record_id"]: tokens_for(Path(item["skill_md"])) for item in skills}
     for index, left in enumerate(skills):
         for right in skills[index + 1 :]:
-            exact = bool(left.get("content_sha256") == right.get("content_sha256"))
-            score = 1.0 if exact else jaccard(token_cache[left["record_id"]], token_cache[right["record_id"]])
-            if exact or score >= threshold:
+            same_name = left.get("skill_id") == right.get("skill_id")
+            same_skill_md = bool(
+                left.get("content_sha256")
+                and left.get("content_sha256") == right.get("content_sha256")
+            )
+            same_tree = bool(
+                left.get("tree_hash_complete")
+                and right.get("tree_hash_complete")
+                and left.get("tree_sha256")
+                and left.get("tree_sha256") == right.get("tree_sha256")
+            )
+            score = 1.0 if same_skill_md else jaccard(
+                token_cache[left["record_id"]], token_cache[right["record_id"]]
+            )
+            similar = not same_skill_md and score >= threshold
+            relations = []
+            if same_name:
+                relations.append("SAME_NAME")
+            if same_skill_md:
+                relations.append("SAME_SKILL_MD")
+            if same_tree:
+                relations.append("SAME_TREE")
+            if similar:
+                relations.append("SIMILAR_INSTRUCTIONS")
+            if relations:
+                left_runtime = left.get("runtime_id")
+                right_runtime = right.get("runtime_id")
+                left_targets = set(left.get("runtime_targets") or ([left_runtime] if left_runtime else []))
+                right_targets = set(right.get("runtime_targets") or ([right_runtime] if right_runtime else []))
+                same_runtime = bool(
+                    left_runtime
+                    and left_runtime == right_runtime
+                    and left_targets
+                    and left_targets == right_targets
+                    and left.get("deployment_id")
+                    and left.get("deployment_id") == right.get("deployment_id")
+                )
+                cross_runtime = bool(left_targets and right_targets and left_targets != right_targets)
+                deployment_flags = ["CROSS_RUNTIME_MIRROR"] if cross_runtime and (same_tree or same_skill_md) else []
+                relation = (
+                    "SAME_TREE"
+                    if same_tree
+                    else "SAME_SKILL_MD"
+                    if same_skill_md
+                    else "SIMILAR_INSTRUCTIONS"
+                    if similar
+                    else "SAME_NAME"
+                )
+                cleanup_candidate = bool(
+                    same_tree
+                    and same_runtime
+                    and not cross_runtime
+                    and left.get("structural_valid", False)
+                    and right.get("structural_valid", False)
+                    and not left.get("protected", False)
+                    and not right.get("protected", False)
+                    and left.get("asset_state") not in {"INACTIVE_CACHED_VERSION", "CACHED_VERSION_UNKNOWN"}
+                    and right.get("asset_state") not in {"INACTIVE_CACHED_VERSION", "CACHED_VERSION_UNKNOWN"}
+                )
                 evidence = {
                     "other_skill": right["skill_id"],
                     "other_record_id": right["record_id"],
                     "score": round(score, 3),
-                    "status": "OBSERVED" if exact else "INFERRED",
-                    "method": "exact_file_hash" if exact else "instruction_token_jaccard",
+                    "status": "INFERRED" if relation == "SIMILAR_INSTRUCTIONS" else "OBSERVED",
+                    "method": (
+                        "complete_tree_hash"
+                        if same_tree
+                        else "skill_md_hash"
+                        if same_skill_md
+                        else "instruction_token_jaccard"
+                        if similar
+                        else "declared_name"
+                    ),
+                    "relation": relation,
+                    "relations": relations,
+                    "deployment_flags": deployment_flags,
+                    "cleanup_candidate": cleanup_candidate,
                 }
                 result[left["record_id"]].append(evidence)
                 reverse = {**evidence, "other_skill": left["skill_id"], "other_record_id": left["record_id"]}
@@ -158,13 +227,18 @@ def recommendation_for(
     if skill.get("status") == "ARCHIVED":
         return "OBSERVE", ["Already archived; use the restore workflow if needed."]
 
-    exact_overlap = [item for item in overlaps if item["status"] == "OBSERVED"]
-    inferred_overlap = [item for item in overlaps if item["status"] == "INFERRED"]
+    tree_overlap = [item for item in overlaps if item.get("cleanup_candidate")]
+    cross_runtime_mirror = [
+        item for item in overlaps if "CROSS_RUNTIME_MIRROR" in item.get("deployment_flags", [])
+    ]
+    same_skill_md = [item for item in overlaps if item.get("relation") == "SAME_SKILL_MD"]
+    inferred_overlap = [item for item in overlaps if item.get("relation") == "SIMILAR_INSTRUCTIONS"]
     inactivity_days = days_since(metrics.get("last_attributed_invocation"), now)
     coverage_days = days_since(coverage.get("since"), now)
     no_use_days = inactivity_days if inactivity_days is not None else coverage_days
     replacement_available = any(
-        item.get("other_attributed_invocations", 0) > 0 or item.get("other_protected", False)
+        item.get("relation") in {"SAME_TREE", "SAME_SKILL_MD", "SIMILAR_INSTRUCTIONS"}
+        and (item.get("other_attributed_invocations", 0) > 0 or item.get("other_protected", False))
         for item in overlaps
     )
 
@@ -177,14 +251,30 @@ def recommendation_for(
         and no_use_days is not None
         and no_use_days >= int(thresholds["archive_inactivity_days"])
         and replacement_available
+        and runtime_release_matches(skill)
+        and skill.get("asset_state") not in {"INACTIVE_CACHED_VERSION", "CACHED_VERSION_UNKNOWN"}
+        and skill.get("structural_valid", False)
+        and not cross_runtime_mirror
     ):
         return "ARCHIVE", [
             f"Complete coverage reports no attributed use for at least {no_use_days} days.",
             "An overlapping Skill has observed use or is protected; archive remains reversible and requires approval.",
         ]
 
-    if exact_overlap:
-        return "MERGE", [f"Exact SKILL.md duplicate of {exact_overlap[0]['other_skill']}."]
+    if tree_overlap:
+        return "MERGE", [f"Complete Skill tree duplicate of {tree_overlap[0]['other_skill']}; human confirmation is required."]
+
+    if cross_runtime_mirror:
+        return "OBSERVE", [
+            f"Content mirror across runtimes with {cross_runtime_mirror[0]['other_skill']}.",
+            "Keep each runtime copy unless that runtime is explicitly confirmed not to need it.",
+        ]
+
+    if same_skill_md:
+        return "OBSERVE", [
+            f"SKILL.md matches {same_skill_md[0]['other_skill']}, but the complete Skill trees differ.",
+            "Compare scripts, assets, and references before considering consolidation.",
+        ]
 
     known = metrics["known_outcomes"]
     failures = metrics["failure"]
@@ -202,9 +292,9 @@ def recommendation_for(
         return "EVOLVE", reasons
 
     if inferred_overlap:
-        return "MERGE", [
+        return "OBSERVE", [
             f"Instruction overlap with {inferred_overlap[0]['other_skill']} is inferred, not proven.",
-            "Review unique assets and workflows before any archive decision.",
+            "Text similarity alone does not establish functional substitutability.",
         ]
 
     if (
@@ -285,7 +375,10 @@ def build_report(data_dir: Path) -> dict[str, Any]:
                         "status": "EXPLICIT" if metrics["known_outcomes"] else "UNKNOWN",
                         "known_outcomes": metrics["known_outcomes"],
                     },
-                    "EXPERIMENTAL": {"status": "UNKNOWN", "note": "Not produced by v0.1."},
+                    "EXPERIMENTAL": {
+                        "status": "UNKNOWN",
+                        "note": "No controlled parent/candidate evaluation is attached to this report.",
+                    },
                 },
             }
         )
@@ -301,7 +394,7 @@ def build_report(data_dir: Path) -> dict[str, Any]:
             "Codex exposes no public SkillInvoked Hook; only attributed invocation events count.",
             "UNKNOWN is never counted as POSITIVE.",
             "Near-overlap is an inference and requires human review.",
-            "EVOLVE is a recommendation only; v0.1 does not mutate or promote Skills.",
+            "EVOLVE is a recommendation only; promotion still requires isolated evaluation and explicit approval.",
         ],
     }
 

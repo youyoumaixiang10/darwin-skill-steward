@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Local telemetry storage for Darwin for Codex v0.1.
+"""Local telemetry storage for Darwin v0.3.1.
 
 The module deliberately separates event metadata from short-lived text evidence.
 It uses only the Python standard library so Hook execution has no package setup.

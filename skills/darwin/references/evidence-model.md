@@ -1,13 +1,13 @@
-# Darwin v0.1 evidence model
+# Darwin v0.3.1 evidence model
 
 ## Evidence lanes
 
 | Lane | Examples | What it can prove |
 |---|---|---|
-| `STRUCTURAL` | file hash, frontmatter, exact duplicate, inferred text overlap | What exists and how similar files appear |
+| `STRUCTURAL` | parsed frontmatter, Skill file hash, complete tree hash, inferred text overlap | What exists and which level of similarity is actually established |
 | `BEHAVIORAL` | attributed invocation event | That a named Skill was reported as used, subject to attribution source |
 | `HUMAN` | explicit `POSITIVE`, `REFINEMENT`, or `FAILURE` label | The user's stated outcome for a linked event |
-| `EXPERIMENTAL` | controlled parent/candidate eval | Comparative performance; not produced by v0.1 |
+| `EXPERIMENTAL` | controlled parent/candidate eval | Comparative performance from isolated Darwin evaluations |
 
 Evidence status is one of `OBSERVED`, `INFERRED`, `EXPLICIT`, or `UNKNOWN`. Do not collapse the lanes into a single numeric confidence score.
 
@@ -28,6 +28,7 @@ The `Stop` Hook always creates `UNKNOWN`; it only proves that Codex stopped the 
 
 - `KEEP`: sufficient known outcomes and a low failure rate.
 - `OBSERVE`: insufficient, unattributed, or conflicting evidence.
-- `MERGE`: structural overlap; exact duplicates are observed, near-duplicates are inferred.
-- `ARCHIVE`: complete usage coverage, sustained inactivity, and overlapping or replaced capability. Missing telemetry alone never qualifies.
-- `EVOLVE`: repeated explicit failures on an attributed, frequently used Skill. v0.1 stops at the recommendation.
+- `MERGE`: complete `SAME_TREE` duplicate within one runtime, after unique files and scripts are compared and a human confirms consolidation.
+- `OBSERVE`: `SAME_SKILL_MD`, `SIMILAR_INSTRUCTIONS`, and `CROSS_RUNTIME_MIRROR` findings remain here until stronger evidence exists.
+- `ARCHIVE`: complete usage coverage, sustained inactivity, a viable replacement, a complete tree fingerprint, and explicit confirmation that the target runtime no longer needs this copy. Missing telemetry alone never qualifies.
+- `EVOLVE`: repeated explicit failures on an attributed, frequently used Skill. Promotion still requires isolated evaluation and explicit approval.

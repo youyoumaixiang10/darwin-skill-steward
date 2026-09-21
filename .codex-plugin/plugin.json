@@ -1,6 +1,6 @@
 {
   "name": "darwin-for-codex",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "description": "Evidence-aware cross-Agent Skill governance with isolated validation, human-approved promotion, and rollback.",
   "author": {
     "name": "Darwin for Codex contributors"

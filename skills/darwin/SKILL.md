@@ -5,7 +5,7 @@ description: Audit, package, manage, and safely evolve Skills across Codex, Clau
 
 # Darwin
 
-Darwin v0.3 is a controlled cross-Agent Skill evolution system. Its operating loop is:
+Darwin v0.3.1 is a controlled cross-Agent Skill evolution system. Its operating loop is:
 
 `Observe -> Diagnose -> Candidate -> Validate -> Human Approve -> Promote or Roll Back`
 
@@ -22,6 +22,8 @@ It may recommend `KEEP`, `OBSERVE`, `ARCHIVE`, `MERGE`, or `EVOLVE`. Evolution e
 - Dry runs, LLM scores, silence, and `UNKNOWN` outcomes cannot prove improvement.
 - Promotion requires a passing deterministic check, a real `full_test` that favors the candidate, and a strict majority from at least three independent paired evaluators.
 - Default cleanup means reversible archive, never permanent deletion.
+- Treat `SAME_SKILL_MD`, `SAME_TREE`, and `SIMILAR_INSTRUCTIONS` as different findings. Text similarity alone never justifies `MERGE`.
+- Treat `CROSS_RUNTIME_MIRROR` as a deployment dependency. Do not archive one runtime's copy until that runtime is explicitly marked as no longer needing it.
 - Before any archive, restore, promotion, or rollback, show the exact target, evidence, hashes, destination, and rollback path; proceed only after the user gives the exact approval phrase produced by the plan command.
 - Do not generate the approval phrase on the user's behalf or treat a vague acknowledgement as approval.
 
@@ -31,7 +33,7 @@ It may recommend `KEEP`, `OBSERVE`, `ARCHIVE`, `MERGE`, or `EVOLVE`. Evolution e
 2. Run `registry.py scan` and inspect its summary. A first scan supports structure findings, not historical usage claims.
 3. Run `health.py report --format markdown`. State the report's limitations before recommendations.
 4. Present recommendations with evidence lanes: `STRUCTURAL`, `BEHAVIORAL`, `HUMAN`, and `EXPERIMENTAL`.
-5. For `ARCHIVE`, use the two-step `archive.py` flow.
+5. For `ARCHIVE`, first record that the target runtime no longer needs the exact copy, then use the two-step `archive.py` flow.
 6. For `EVOLVE`, prepare one isolated candidate with an explicit human reason. Edit only the returned `candidate_path`.
 7. Use proposal prompts to improve the candidate, then run `record-proposal` with a concrete summary. Validate it on separate realistic prompts. Run deterministic validators first. Run the original and candidate with the same task, model, settings, permissions, and budget.
 8. Record at least one real `full_test` and three independent paired comparisons. Do not describe a dry run as a real test.
@@ -56,6 +58,7 @@ python scripts/registry.py scan
 python scripts/registry.py list
 python scripts/telemetry.py summary
 python scripts/health.py report --format markdown
+python scripts/registry.py set-runtime-dependency --skill <skill-name> --path <exact-path> --status not-required
 python scripts/archive.py plan --skill <skill-name>
 python scripts/archive.py execute --approval-id <id> --approval-text "APPROVE ARCHIVE <skill-name>"
 python scripts/archive.py list

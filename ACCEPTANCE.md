@@ -16,8 +16,12 @@ The suite verifies:
 - secrets are redacted from short-term evidence;
 - concurrent event writes remain readable;
 - system Skills are protected;
+- folded, literal, quoted, UTF-8, empty, and invalid YAML frontmatter share one parser result across scanning and packaging;
+- duplicate relationships distinguish `SAME_SKILL_MD`, `SAME_TREE`, instruction similarity, and cross-runtime mirrors;
+- plugin inventory separates active assets from inactive cached versions;
 - duplicate and behavior recommendations preserve evidence lanes;
 - missing telemetry alone cannot produce `ARCHIVE`;
+- archive planning fails until the target runtime dependency is explicitly marked `NOT_REQUIRED`;
 - archive execution fails without exact approval;
 - changed targets invalidate approval;
 - archive is reversible;
@@ -40,7 +44,7 @@ The suite verifies:
 5. Run `telemetry.py summary`; confirm prompt/stop events exist and outcomes show `UNKNOWN`.
 6. Run `registry.py scan`, then `health.py report --format markdown`.
 7. Confirm official/system Skills show protected `KEEP`, and the report states that first-run usage is unknown.
-8. On a disposable user Skill, run `archive.py plan`. Confirm nothing moves before the exact approval phrase is returned.
+8. On a disposable user Skill, record `set-runtime-dependency --status not-required`, then run `archive.py plan`. Confirm nothing moves before the exact approval phrase is returned.
 9. Approve, archive, create a restore plan, approve again, and confirm the original tree hash is restored.
 10. On a disposable Skill, prepare and edit a candidate. Confirm the live Skill is unchanged.
 11. Record the proposal, deterministic result, held-out full-test, and three paired results. Confirm dry-run-only evidence cannot produce a promotion plan.
