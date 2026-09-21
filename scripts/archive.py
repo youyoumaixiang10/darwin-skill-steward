@@ -12,7 +12,7 @@ import shutil
 import uuid
 from typing import Any
 
-from registry import select_skill, tree_sha256
+from registry import runtime_release_matches, select_skill, tree_sha256
 from telemetry import (
     atomic_write_json,
     initialize_data_dir,
@@ -43,9 +43,23 @@ def save_registry(data_dir: Path, registry: dict[str, Any]) -> None:
     atomic_write_json(data_dir / "registry.json", registry)
 
 
-def ensure_archivable(skill: dict[str, Any], registry: dict[str, Any]) -> Path:
+def ensure_archivable(
+    skill: dict[str, Any],
+    registry: dict[str, Any],
+    *,
+    require_runtime_release: bool = True,
+) -> Path:
     if skill.get("protected") or not skill.get("manageable"):
-        raise SystemExit("Protected or external Skills cannot be archived by Darwin v0.1.")
+        raise SystemExit("Protected or external Skills cannot be archived by Darwin v0.3.")
+    if not skill.get("structural_valid", False):
+        raise SystemExit("Structurally invalid Skills cannot receive an archive plan.")
+    if not skill.get("tree_hash_complete", False):
+        raise SystemExit("An incomplete tree fingerprint cannot receive an archive plan.")
+    if require_runtime_release and not runtime_release_matches(skill):
+        raise SystemExit(
+            "Archive planning requires an explicit runtime dependency status of NOT_REQUIRED. "
+            "Record it with registry.py set-runtime-dependency after confirming the target runtime no longer needs this copy."
+        )
     source = Path(skill["path"])
     if not source.exists() or not source.is_dir():
         raise SystemExit(f"Skill directory does not exist: {source}")
@@ -123,6 +137,7 @@ def archive_plan(data_dir: Path, skill_name: str, skill_path: str | None) -> dic
         "action": "ARCHIVE",
         "skill": {"name": skill["skill_id"], "description": skill.get("description", ""), "path": str(source)},
         "destination": str(destination),
+        "target_tree_sha256": approval["target_tree_sha256"],
         "rollback": "Use plan-restore and restore with a separate explicit approval.",
         "expires_at": approval["expires_at"],
         "required_user_reply": phrase,
@@ -214,6 +229,7 @@ def restore_plan(data_dir: Path, archive_id: str) -> dict[str, Any]:
         "archive_id": archive_id,
         "source": str(archive_path),
         "destination": item["original_path"],
+        "target_tree_sha256": approval["target_tree_sha256"],
         "required_user_reply": phrase,
         "warning": "Do not execute until the user personally returns the exact approval phrase.",
     }

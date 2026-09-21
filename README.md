@@ -1,4 +1,4 @@
-# Darwin v0.3
+# Darwin v0.3.1
 
 Darwin is a conservative, controlled Skill evolution system for multiple Agent runtimes:
 
@@ -55,6 +55,8 @@ darwin-for-codex/
 │   ├── workbuddy.py
 │   └── doubao.py
 ├── config/defaults.json
+├── darwin_core/frontmatter.py
+├── requirements.txt
 ├── schemas/
 ├── docs/
 ├── tests/
@@ -83,7 +85,13 @@ Event metadata contains hashes and lengths. Text evidence is redacted by default
 
 ## Local development
 
-All scripts use the Python standard library. On this Windows Codex desktop installation, the bundled interpreter is under:
+The Hook telemetry path uses only the Python standard library. Registry scanning and packaging use PyYAML's safe loader so folded, literal, quoted, UTF-8, empty, and invalid frontmatter are handled consistently. Install the declared dependency before local development:
+
+```text
+python -m pip install -r requirements.txt
+```
+
+On this Windows Codex desktop installation, the bundled interpreter is under:
 
 ```text
 %USERPROFILE%\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe
@@ -100,6 +108,14 @@ python scripts/telemetry.py --data-dir .darwin-test summary
 Installed Hook commands resolve `PLUGIN_DATA` automatically. On Windows, `run-observer.ps1` tries a system Python/launcher and then the Codex bundled runtime.
 
 ## Approval and archive
+
+Before Darwin can generate an archive plan, the registry record must explicitly say that the target runtime no longer needs that copy:
+
+```text
+python scripts/registry.py set-runtime-dependency --skill old-skill --path <exact-path> --status not-required
+```
+
+This declaration is stored separately for each discovered copy. Cross-runtime mirrors remain observations unless the relevant runtime copy is explicitly released.
 
 Archive is a two-step action:
 
@@ -127,7 +143,10 @@ Dry runs and judge-only scores never pass the gate. Full and paired evaluations 
 - Only `PLATFORM`, `MANAGED_SELF_REPORT`, and `MANUAL` invocation attribution enters high-confidence usage counts.
 - `INFERRED` can support triage, never high-confidence health metrics.
 - Explicit outcomes link to the same Skill and turn; unlinked labels are ignored by health scoring.
-- `ARCHIVE` requires a dated complete-coverage window, sufficient inactivity, and an overlapping Skill with observed use or protected availability; missing logs alone are never enough.
+- Structural relationships are separate: `SAME_NAME`, `SAME_SKILL_MD`, `SAME_TREE`, and `SIMILAR_INSTRUCTIONS`. `CROSS_RUNTIME_MIRROR` is an independent deployment flag.
+- Only a complete `SAME_TREE` comparison can become a duplicate-cleanup candidate. Matching `SKILL.md` files or similar text remain observations when other files differ.
+- Plugin cache entries are active only when a `latest` link or installation registration identifies the selected version. Unresolved cache entries remain `CACHED_VERSION_UNKNOWN` and never become cleanup candidates.
+- `ARCHIVE` requires dated complete coverage, sufficient inactivity, a viable replacement, a complete tree fingerprint, and explicit confirmation that the target runtime no longer needs that copy. Missing logs alone are never enough.
 - `EVOLVE` opens an isolated candidate workflow; it never authorizes a live mutation by itself.
 
 See [the two-round design review](docs/DESIGN_REVIEW.md), [managed telemetry protocol](docs/MANAGED_SKILL_PROTOCOL.md), and [acceptance plan](ACCEPTANCE.md).

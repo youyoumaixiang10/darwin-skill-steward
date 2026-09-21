@@ -15,7 +15,7 @@ class WorkBuddyAdapterTestCase(unittest.TestCase):
             skill = root / ".agents" / "skills" / "writer"
             skill.mkdir(parents=True)
             (skill / "SKILL.md").write_text(
-                "---\ndescription: Writer\ndescription_zh: 写作\ndescription_en: Writer\nversion: 1.0.0\nauthor: Test\n---\n",
+                "---\nname: writer\ndescription: Writer\ndescription_zh: 写作\ndescription_en: Writer\nversion: 1.0.0\nauthor: Test\n---\n",
                 encoding="utf-8",
             )
             adapter = WorkBuddyAdapter(home=root, cwd=root)
