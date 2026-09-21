@@ -1,11 +1,11 @@
 ---
 name: darwin
-description: Audit, manage, and safely evolve Codex Skills using explicit feedback, isolated candidates, real old-versus-new tests, human-approved promotion, and reversible rollback. Use for Skill health, duplication, archiving, improvement, evaluation, or controlled evolution.
+description: Audit, package, manage, and safely evolve Skills across Codex, Claude Code/Cowork, WorkBuddy, and exported Doubao assets using explicit feedback, isolated candidates, real old-versus-new tests, human-approved promotion, and reversible rollback. Use for Skill health, duplication, archiving, cross-Agent packaging, improvement, evaluation, or controlled evolution.
 ---
 
 # Darwin
 
-Darwin v0.2 is a controlled Skill evolution system. Its operating loop is:
+Darwin v0.3 is a controlled cross-Agent Skill evolution system. Its operating loop is:
 
 `Observe -> Diagnose -> Candidate -> Validate -> Human Approve -> Promote or Roll Back`
 
@@ -38,6 +38,15 @@ It may recommend `KEEP`, `OBSERVE`, `ARCHIVE`, `MERGE`, or `EVOLVE`. Evolution e
 9. Run `plan-promote`, show its complete result, and stop. Execute only after the user personally returns the exact phrase.
 10. If a promoted version regresses, use the separate `plan-rollback` and `rollback` approval flow.
 
+## Cross-Agent workflow
+
+- Use `scripts/runtime.py` for non-Codex discovery, candidate packaging, and reviewed import plans.
+- Claude Code discovery covers user and project `.claude/skills` roots. Candidate packages use the documented Claude plugin structure. Claude Code Hook events remain turn evidence only.
+- Claude Cowork accepts a reviewed custom plugin ZIP. Discovery requires an explicit exported Skill root because Cowork does not expose a stable local installed-plugin directory to Darwin.
+- WorkBuddy discovery covers `.agents/skills`; packaging enforces its documented `SKILL.md` metadata and produces an uploadable ZIP.
+- Doubao discovery requires an explicit exported Skill root. Darwin produces a reviewed ZIP and manual client import plan because no stable public automatic-install or invocation telemetry interface has been verified.
+- A manual import plan is not proof of installation. Record promotion success only after the user verifies the native Skill in the target runtime.
+
 ## Commands
 
 Use a Python 3 interpreter. On Windows without Python on `PATH`, the Codex desktop runtime includes one; see the README for discovery instructions.
@@ -61,6 +70,11 @@ python scripts/evolution.py plan-promote --candidate-id <id>
 python scripts/evolution.py execute-promote --approval-id <id> --approval-text "APPROVE PROMOTE <skill> <candidate-id>"
 python scripts/evolution.py plan-rollback --candidate-id <id>
 python scripts/evolution.py rollback --approval-id <id> --approval-text "APPROVE ROLLBACK <skill> <candidate-id>"
+python scripts/runtime.py --runtime claude-code list
+python scripts/runtime.py --runtime claude-cowork --root <export-root> package --asset <skill-id> --destination <output-dir>
+python scripts/runtime.py --runtime workbuddy package --asset <skill-id> --destination <output-dir>
+python scripts/runtime.py --runtime doubao --root <export-root> plan-apply --asset <skill-id> --package <zip-path>
+python scripts/runtime.py --runtime doubao --root <export-root> plan-rollback --asset <skill-id> --package <prior-zip-path>
 ```
 
 Use `--data-dir <path>` in tests or manual development. Installed Hook runs use `PLUGIN_DATA` and create a local locator so later CLI commands resolve the same data directory.

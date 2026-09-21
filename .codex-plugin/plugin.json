@@ -1,7 +1,7 @@
 {
   "name": "darwin-for-codex",
-  "version": "0.2.0",
-  "description": "Evidence-aware Skill governance and controlled evolution with isolated validation, human-approved promotion, and rollback.",
+  "version": "0.3.0",
+  "description": "Evidence-aware cross-Agent Skill governance with isolated validation, human-approved promotion, and rollback.",
   "author": {
     "name": "Darwin for Codex contributors"
   },
@@ -10,8 +10,8 @@
   "skills": "./skills/",
   "interface": {
     "displayName": "Darwin for Codex",
-    "shortDescription": "Safely evolve Skills with evidence and approval.",
-    "longDescription": "Observe Skill evidence, prepare isolated candidates, require real comparative validation, and promote or roll back only with explicit human approval.",
+    "shortDescription": "Safely evolve Skills across Agent runtimes.",
+    "longDescription": "Govern Codex, Claude, WorkBuddy, and exported Doubao Skills through evidence, isolated candidates, comparative validation, explicit approval, and rollback.",
     "developerName": "Darwin for Codex contributors",
     "category": "Productivity",
     "capabilities": ["Interactive", "Write"],

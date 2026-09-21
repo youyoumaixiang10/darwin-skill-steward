@@ -1,14 +1,22 @@
-# Darwin for Codex v0.2
+# Darwin v0.3
 
-Darwin is a conservative, controlled Skill evolution system for Codex:
+Darwin is a conservative, controlled Skill evolution system for multiple Agent runtimes:
 
 `Observe -> Diagnose -> Candidate -> Validate -> Human Approve -> Promote or Roll Back`
 
 It inventories Skills, keeps system/official assets protected, collects local evidence, and generates `KEEP / OBSERVE / ARCHIVE / MERGE / EVOLVE` recommendations. For EVOLVE, it edits and tests only an isolated candidate. Promotion and rollback both require separate exact human approval. It never permanently deletes Skills.
 
-## Cross-Agent architecture
+## Runtime support
 
-Darwin now separates runtime-independent governance from Agent-specific adapters. `darwin_core` owns the runtime contract, durable storage boundary, and evidence-gated promotion policy. `adapters/codex.py` is the first adapter and preserves the existing Codex discovery and Hook behavior. Claude Code/Cowork, WorkBuddy, and the Doubao client are intentionally listed as planned until their adapters and capability tests exist; see [the runtime capability matrix](docs/runtime-capability-matrix.md).
+Darwin separates runtime-independent governance from Agent-specific adapters. `darwin_core` owns the runtime contract, durable storage boundary, and evidence-gated promotion policy.
+
+- **Codex:** full existing governance, observation, approval, promotion, and rollback workflow.
+- **Claude Code:** discovers user/project Skills, translates Hook turn events, and packages candidates as Claude plugins.
+- **Claude Cowork:** packages candidates as uploadable custom plugins and produces a reviewed manual installation plan.
+- **WorkBuddy:** discovers `.agents/skills`, validates documented metadata, packages a Skill ZIP, and produces a reviewed upload plan.
+- **Doubao client:** scans only user-selected exports, produces a candidate ZIP, and prepares a manual upload plan. Automatic installation and runtime telemetry remain unavailable until a stable public interface is verified.
+
+Use `scripts/runtime.py` to list assets, package candidates, and generate platform-specific import plans. See the exact capability levels in [the runtime capability matrix](docs/runtime-capability-matrix.md).
 
 ## Official capability review
 
@@ -39,7 +47,13 @@ darwin-for-codex/
 │   ├── health.py
 │   ├── archive.py
 │   ├── evolution.py
-│   └── run-observer.ps1
+│   ├── run-observer.ps1
+│   └── runtime.py
+├── adapters/
+│   ├── codex.py
+│   ├── claude.py
+│   ├── workbuddy.py
+│   └── doubao.py
 ├── config/defaults.json
 ├── schemas/
 ├── docs/
