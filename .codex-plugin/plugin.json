@@ -1,20 +1,20 @@
 {
-  "name": "darwin-for-codex",
-  "version": "0.3.1",
-  "description": "Evidence-aware cross-Agent Skill governance with isolated validation, human-approved promotion, and rollback.",
+  "name": "darwin-skill-steward",
+  "version": "0.4.0",
+  "description": "Inventory, clean up, and safely improve the Skills of each Agent, with evidence-aware governance, isolated validation, and rollback.",
   "author": {
-    "name": "Darwin for Codex contributors"
+    "name": "Darwin Skill Steward contributors"
   },
   "license": "MIT",
   "keywords": ["skills", "governance", "telemetry", "health", "evolution", "evaluation", "rollback"],
   "skills": "./skills/",
   "interface": {
-    "displayName": "Darwin for Codex",
-    "shortDescription": "Safely evolve Skills across Agent runtimes.",
+    "displayName": "Darwin Skill Steward",
+    "shortDescription": "Inventory, clean up, and improve your Skills.",
     "longDescription": "Govern Codex, Claude, WorkBuddy, and exported Doubao Skills through evidence, isolated candidates, comparative validation, explicit approval, and rollback.",
-    "developerName": "Darwin for Codex contributors",
+    "developerName": "Darwin Skill Steward contributors",
     "category": "Productivity",
     "capabilities": ["Interactive", "Write"],
-    "defaultPrompt": "Audit my Skills and safely evolve validated candidates."
+    "defaultPrompt": "盘点 Skills"
   }
 }

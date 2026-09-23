@@ -1,4 +1,22 @@
-# Darwin v0.3.1
+# Darwin Skill Steward v0.4.0
+
+## 快速使用：Skill 管家
+
+在 Agent 里说“盘点 Skills”就能用，每次只盘点当前这个 Agent。也可以直接运行命令（`--agent` 可选 codex / claude / workbuddy / doubao；不写时自动识别当前 Agent）：
+
+```text
+python scripts/darwin.py --agent claude inventory   # 列出当前 Agent 的全部 Skill：来源、使用次数、最近使用
+python scripts/darwin.py advise        # 编号建议：可以删除 / 建议优化 / 保持现状，每条附理由
+python scripts/darwin.py delete 1、3    # 删除 = 移进回收站 ~/.darwin/recycle-bin，可恢复
+python scripts/darwin.py restore <回收站编号>
+python scripts/darwin.py align 12      # 同一个 Skill 的多份副本统一成一个版本
+python scripts/darwin.py draft 7       # 优化：先生成草稿，确认后再 apply-draft
+python scripts/darwin.py checkup       # 每月体检：只报告新变化
+```
+
+使用次数来自本机记录：Codex 会话、Claude Code 对话、WorkBuddy 使用日志。豆包没有可读取的记录，显示为“无法统计”。只有自己安装的 Skill 会被移动；系统自带和插件带的 Skill 只给建议。报告生成后如果 Skill 被改过，操作会被拒绝。
+
+下面是 Darwin 的底层治理与受控进化机制。
 
 Darwin is a conservative, controlled Skill evolution system for multiple Agent runtimes:
 
@@ -33,7 +51,7 @@ The manifest intentionally omits a `hooks` field because the documented default 
 ## Project layout
 
 ```text
-darwin-for-codex/
+darwin-skill-steward/
 ├── .codex-plugin/plugin.json
 ├── hooks/hooks.json
 ├── skills/darwin/
@@ -115,7 +133,7 @@ Before Darwin can generate an archive plan, the registry record must explicitly 
 python scripts/registry.py set-runtime-dependency --skill old-skill --path <exact-path> --status not-required
 ```
 
-This declaration is stored separately for each discovered copy. Cross-runtime mirrors remain observations unless the relevant runtime copy is explicitly released.
+This declaration is stored separately for each discovered copy and is bound to that copy's tree hash, runtime, and deployment. If the content changes afterwards, archive planning is refused until you rescan and re-confirm. Cross-runtime mirrors remain observations unless the relevant runtime copy is explicitly released.
 
 Archive is a two-step action:
 
@@ -144,6 +162,7 @@ Dry runs and judge-only scores never pass the gate. Full and paired evaluations 
 - `INFERRED` can support triage, never high-confidence health metrics.
 - Explicit outcomes link to the same Skill and turn; unlinked labels are ignored by health scoring.
 - Structural relationships are separate: `SAME_NAME`, `SAME_SKILL_MD`, `SAME_TREE`, and `SIMILAR_INSTRUCTIONS`. `CROSS_RUNTIME_MIRROR` is an independent deployment flag.
+- Archived copies are not deployed, so they never count as a duplicate of, or a replacement for, a live Skill.
 - Only a complete `SAME_TREE` comparison can become a duplicate-cleanup candidate. Matching `SKILL.md` files or similar text remain observations when other files differ.
 - Plugin cache entries are active only when a `latest` link or installation registration identifies the selected version. Unresolved cache entries remain `CACHED_VERSION_UNKNOWN` and never become cleanup candidates.
 - `ARCHIVE` requires dated complete coverage, sufficient inactivity, a viable replacement, a complete tree fingerprint, and explicit confirmation that the target runtime no longer needs that copy. Missing logs alone are never enough.
