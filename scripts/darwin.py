@@ -30,9 +30,7 @@ from steward import actions, advisor, render, rows, sources, summaries, usage  #
 def build(args: argparse.Namespace, agent: str) -> dict:
     home = Path(args.user_home).expanduser() if args.user_home else None
     skills = sources.discover_all(home, [Path(value) for value in args.doubao_root], agents=[agent])
-    # Codex's shared .agents folder may also serve WorkBuddy; read its log to protect those Skills.
-    readers = [agent, sources.WORKBUDDY] if agent == sources.CODEX else [agent]
-    report = advisor.build_report(skills, usage.read_all(home, readers), agent=agent)
+    report = advisor.build_report(skills, usage.read_all(home, [agent]), agent=agent)
     return rows.finalize(report, actions.darwin_home())
 
 
@@ -79,6 +77,15 @@ def main(argv: list[str] | None = None) -> int:
     restore.add_argument("bin_id")
     args = parser.parse_args(argv)
 
+    try:
+        import yaml  # noqa: F401
+    except ImportError:
+        print(
+            "没有执行：这台电脑的 Python 缺少 PyYAML，读不了 Skill 的说明文件。"
+            "请先运行 `python -m pip install pyyaml`，再重新盘点。",
+            file=sys.stderr,
+        )
+        return 2
     store = actions.darwin_home()
     user_home = Path(args.user_home).expanduser() if args.user_home else None
     try:

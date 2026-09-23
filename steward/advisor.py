@@ -19,6 +19,9 @@ REWORK_RATIO_FOR_OPTIMIZE = 0.25
 COLLISION_THRESHOLD = 0.25
 MAX_COLLISIONS_PER_AGENT = 6
 FEW_CONVERSATIONS = 50
+# Only true duplicates are "pick one": identical copies, or the same Skill
+# under a prefixed name. Similar Skills with different focuses are collisions.
+SUFFIX_DUPLICATE_THRESHOLD = 0.5
 
 DELETE = "可以删除"
 OPTIMIZE = "建议优化"
@@ -58,6 +61,18 @@ def _label(skill: Skill) -> str:
     return f"{skill.name}（共享目录）" if skill.location.startswith("共享目录") else skill.name
 
 
+def _keeper_reason(keeper: Skill, others: list[Skill], usage: dict[str, SkillUsage]) -> str:
+    best_other = max(others, key=lambda s: (usage[s.key].count, usage[s.key].last_used, s.installed_at))
+    mine, theirs = usage[keeper.key], usage[best_other.key]
+    if mine.count > theirs.count:
+        return f"用得最多（{mine.count} 次）"
+    if mine.last_used > theirs.last_used:
+        return f"最近一次用的是它（{mine.last_used}）"
+    if keeper.installed_at > best_other.installed_at:
+        return "装得最晚，通常是更新的版本"
+    return "几个都没怎么用过，保留名字最简洁的这个"
+
+
 def _same_family(left: str, right: str) -> bool:
     """Suite members such as baoyu-post-to-x / baoyu-post-to-weibo share a template."""
     a, b = left.lower().split("-", 1)[0], right.lower().split("-", 1)[0]
@@ -87,6 +102,8 @@ class Advisor:
         self.today = today or dt.date.today().isoformat()
         self.items: list[dict[str, Any]] = []
         self.keep: dict[str, list[str]] = collections.defaultdict(list)
+        self.identical_copies: list[tuple[Skill, Skill]] = []
+        self.duplicate_pairs: set[frozenset[str]] = set()
         self.skill_usage: dict[str, SkillUsage] = {}
         names = collections.Counter((skill.agent, skill.name.lower()) for skill in skills)
         for skill in skills:
@@ -128,18 +145,19 @@ class Advisor:
     def advise(self) -> list[dict[str, Any]]:
         handled: set[str] = set()
         self._mirrors(handled)
+        self._duplicates()
         self._collisions()
         self._plugins(handled)
         for skill in self.skills:
             if skill.key in handled:
                 continue
             self._single(skill)
-        kinds = ["delete", "uninstall_plugin", "optimize", "fix", "align", "collision"]
+        kinds = ["duplicate", "optimize", "fix", "align", "collision", "idle", "idle_plugin"]
         agents = {agent: index for index, agent in enumerate(AGENTS)}
         self.items.sort(
             key=lambda item: (
                 kinds.index(item["kind"]),
-                agents.get(item["targets"][0]["agent"], 9) if item["kind"] == "delete" else 0,
+                agents.get(item["targets"][0]["agent"], 9),
                 item["title"].lower(),
             )
         )
@@ -189,11 +207,13 @@ class Advisor:
                 self.keep["共享目录里的 Skill，其他 Agent 在用"].append(f"{label}：{'、'.join(elsewhere)}")
                 return
             if observed >= MIN_OBSERVED_DAYS:
+                # Long idle alone is not a reason to delete: event-driven Skills
+                # (launch analysis, annual planning) may run only a few times a year.
                 reasons = [f"在 {skill.agent} 里，安装以来有记录的 {observed} 天中一次都没用过。"]
-                if agent_usage.unit == "次对话" and agent_usage.conversations < FEW_CONVERSATIONS:
+                few = agent_usage.unit == "次对话" and agent_usage.conversations < FEW_CONVERSATIONS
+                if few:
                     reasons.append(f"{skill.agent} 本机只保留了 {agent_usage.conversations} 个对话记录，判断仅供参考。")
-                reasons.append("删除会先放进 Darwin 回收站，随时可以恢复。")
-                self._add(DELETE, "delete", f"删除：{label}", reasons, [self._target(skill, fingerprint=True)], observed_days=observed)
+                self._add(KEEP, "idle", f"很久没用：{label}", reasons, [self._target(skill, fingerprint=False)], observed_days=observed, few_records=few)
             else:
                 self.keep[f"装了不到 {MIN_OBSERVED_DAYS} 天或记录太短，还看不出用不用"].append(label)
             return
@@ -216,13 +236,10 @@ class Advisor:
             if total == 0 and observed >= MIN_OBSERVED_DAYS:
                 handled.update(skill.key for skill in members)
                 self._add(
-                    DELETE,
-                    "uninstall_plugin",
-                    f"卸载插件：{plugin}（含 {len(members)} 个 Skill）",
-                    [
-                        f"安装以来有记录的 {observed} 天里，插件内的 {len(members)} 个 Skill 一次都没用过。",
-                        "插件需要在 Agent 自己的插件管理里卸载，Darwin 会告诉你具体怎么操作，不会自动卸载。",
-                    ],
+                    KEEP,
+                    "idle_plugin",
+                    f"很久没用的插件：{plugin}（含 {len(members)} 个 Skill）",
+                    [f"安装以来有记录的 {observed} 天里，插件内的 {len(members)} 个 Skill 一次都没用过。"],
                     [self._target(skill, fingerprint=False) for skill in members],
                     plugin=plugin,
                     agent=agent,
@@ -240,6 +257,8 @@ class Advisor:
             for copy in copies:
                 fill_fingerprint(copy)
             if len({copy.tree_sha256 for copy in copies}) == 1:
+                # Identical same-name copies: nothing to align, but one is redundant.
+                self.identical_copies.extend(itertools.combinations(copies, 2))
                 continue
             targets = [self._target(copy, fingerprint=True) for copy in copies]
             best = max(range(len(copies)), key=lambda i: (copies[i].modified_at, targets[i]["uses"]))
@@ -260,6 +279,68 @@ class Advisor:
                 recommended=best + 1,
             )
 
+    def _duplicates(self) -> None:
+        """Group Skills that do essentially the same job and recommend one to keep."""
+        users = [skill for skill in self.skills if skill.source == USER and skill.on_disk]
+        parent = {skill.key: skill.key for skill in users}
+
+        def find(key: str) -> str:
+            while parent[key] != key:
+                parent[key] = parent[parent[key]]
+                key = parent[key]
+            return key
+
+        evidence: dict[frozenset[str], str] = {}
+        for left, right in self.identical_copies:
+            parent[find(left.key)] = find(right.key)
+            evidence[frozenset({left.key, right.key})] = "两份内容完全一样"
+        for left, right in itertools.combinations(users, 2):
+            a, b = left.name.lower(), right.name.lower()
+            if a == b:
+                continue
+            suffix = a.endswith("-" + b) or b.endswith("-" + a)
+            if not suffix:
+                continue
+            score = _similarity(left.description, right.description)
+            if score >= SUFFIX_DUPLICATE_THRESHOLD:
+                parent[find(left.key)] = find(right.key)
+                evidence[frozenset({left.key, right.key})] = f"名字只差一个前缀，简介 {score:.0%} 相同，是同一个 Skill 的两个版本"
+
+        groups: dict[str, list[Skill]] = collections.defaultdict(list)
+        for skill in users:
+            groups[find(skill.key)].append(skill)
+        for members in groups.values():
+            if len(members) < 2:
+                continue
+            for left, right in itertools.combinations(members, 2):
+                self.duplicate_pairs.add(frozenset({left.path, right.path}))
+            usage = {skill.key: self.skill_usage[skill.key] for skill in members}
+            keeper = max(
+                members,
+                key=lambda s: (usage[s.key].count, usage[s.key].last_used, s.installed_at, -len(s.name), s.location != "共享目录 .agents"),
+            )
+            others = [skill for skill in members if skill is not keeper]
+            keeper_reason = _keeper_reason(keeper, others, usage)
+            member_reasons = {}
+            for other in others:
+                why = evidence.get(frozenset({other.key, keeper.key}), "和同组其他几份是同一个 Skill")
+                keeper_label = f"{keeper.location}那份" if keeper.name.lower() == other.name.lower() else keeper.name
+                member_reasons[other.path] = (
+                    f"和{keeper_label}是重复的（{why}）；这份用过 {usage[other.key].count} 次，"
+                    f"{keeper_label}用过 {usage[keeper.key].count} 次，删掉这份功能不会少"
+                )
+            names = "、".join(_label(skill) for skill in members)
+            self._add(
+                DELETE,
+                "duplicate",
+                f"功能重复，多选一：{names}",
+                [f"建议保留 {_label(keeper)}：{keeper_reason}。", *member_reasons.values()],
+                [self._target(skill, fingerprint=False) for skill in members],
+                keeper_path=keeper.path,
+                keeper_reason=keeper_reason,
+                member_reasons=member_reasons,
+            )
+
     def _collisions(self) -> None:
         by_agent: dict[str, list[Skill]] = collections.defaultdict(list)
         for skill in self.skills:
@@ -275,6 +356,8 @@ class Advisor:
                 if left.plugin and left.plugin == right.plugin:
                     continue
                 if _same_family(left.name, right.name) or _names_each_other(left, right):
+                    continue
+                if frozenset({left.path, right.path}) in self.duplicate_pairs:
                     continue
                 score = _similarity(left.description, right.description)
                 if score >= COLLISION_THRESHOLD:

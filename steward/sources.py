@@ -173,12 +173,18 @@ def _body_hint(folder: Path) -> str:
 
 
 def _installed_at(folder: Path) -> str:
-    """Approximate install date: folder creation (Windows) or SKILL.md change."""
+    """Install date = when the Skill folder was created on this machine.
+
+    File modification times are not used: copying or unzipping a Skill keeps
+    the author's old mtimes, which made fresh installs look months old.
+    """
     try:
-        stamps = [folder.stat().st_ctime, (folder / "SKILL.md").stat().st_mtime]
+        stat = folder.stat()
     except OSError:
         return ""
-    return dt.datetime.fromtimestamp(min(stamps)).strftime("%Y-%m-%d")
+    # st_birthtime on macOS/BSD; on Windows st_ctime is the creation time.
+    created = getattr(stat, "st_birthtime", None) or stat.st_ctime
+    return dt.datetime.fromtimestamp(created).strftime("%Y-%m-%d")
 
 
 def fill_fingerprint(skill: Skill) -> Skill:

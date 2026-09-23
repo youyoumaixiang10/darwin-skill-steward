@@ -7,6 +7,7 @@ from pathlib import Path
 import sys
 import tempfile
 import unittest
+from unittest import mock
 
 PLUGIN_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(PLUGIN_ROOT))
@@ -27,7 +28,13 @@ def write_skill(folder: Path, name: str, description: str, body: str = "Body.", 
     skill_md.write_text(f"---\nname: {name}\ndescription: {description}\n---\n\n{body}\n", encoding="utf-8")
     stamp = (dt.datetime.now() - dt.timedelta(days=age_days)).timestamp()
     os.utime(skill_md, (stamp, stamp))
+    os.utime(folder, (stamp, stamp))
     return folder
+
+
+def fake_install_date(folder: Path) -> str:
+    # Folder creation time cannot be set portably; tests age folders via mtime instead.
+    return dt.datetime.fromtimestamp(folder.stat().st_mtime).strftime("%Y-%m-%d")
 
 
 def jsonl(path: Path, entries: list[dict]) -> None:
@@ -55,6 +62,9 @@ def claude_user(text: str, when: str) -> dict:
 class StewardTestCase(unittest.TestCase):
     def setUp(self) -> None:
         self.temp = tempfile.TemporaryDirectory()
+        patcher = mock.patch.object(sources, "_installed_at", fake_install_date)
+        patcher.start()
+        self.addCleanup(patcher.stop)
         self.home = Path(self.temp.name) / "home"
         self.store = Path(self.temp.name) / "darwin"
         h = self.home
@@ -76,7 +86,7 @@ class StewardTestCase(unittest.TestCase):
         # Claude Code: user Skills plus a plugin, with usage in transcripts.
         self.claude_copy = write_skill(h / ".claude/skills/copywriting", "copywriting", "Write marketing copy", "Newer body")
         write_skill(h / ".claude/skills/title-maker", "title-maker", "Generate viral titles for WeChat articles and posts quickly")
-        write_skill(h / ".claude/skills/headline-maker", "headline-maker", "Generate viral titles for WeChat articles and posts fast")
+        write_skill(h / ".claude/skills/headline-maker", "headline-maker", "Generate cover images for WeChat articles and posts fast")
         plugin_path = h / ".claude/plugins/cache/market/finance/1.0"
         write_skill(plugin_path / "skills/comps", "comps", "Comparable companies")
         (h / ".claude/plugins").mkdir(parents=True, exist_ok=True)
@@ -133,26 +143,71 @@ class StewardTestCase(unittest.TestCase):
         self.assertFalse(self.usage["豆包"].available)
 
     def test_advice_items_carry_reasons(self) -> None:
-        delete = self.item("delete", "old-tool")
-        self.assertEqual(delete["group"], advisor.DELETE)
-        self.assertTrue(delete["reasons"])
+        idle = self.item("idle", "old-tool")
+        self.assertEqual(idle["group"], advisor.KEEP)
+        self.assertGreaterEqual(idle["observed_days"], 30)
         optimize = self.item("optimize", "copywriting")
         self.assertIn("不是我要的风格", " ".join(optimize["reasons"]))
-        self.assertTrue(any(i["kind"] == "uninstall_plugin" and i["plugin"] == "finance" for i in self.report["items"]))
+        self.assertTrue(any(i["kind"] == "idle_plugin" and i["plugin"] == "finance" for i in self.report["items"]))
+        self.assertFalse(any(i["group"] == advisor.DELETE for i in self.report["items"]))
         self.assertFalse(any("skill-creator" in i["title"] for i in self.report["items"]))
 
     def test_rows_are_numbered_layered_and_explained(self) -> None:
+        write_skill(self.home / ".codex/skills/just-installed", "just-installed", "Brand new helper", age_days=2)
         codex = self.agent_report(sources.CODEX)
         numbers = [r["no"] for r in codex["rows"]]
         self.assertEqual(numbers, list(range(1, len(numbers) + 1)))
-        self.assertEqual(self.row("old-tool", report=codex)["layer"], rows.TRIAL)
+        self.assertEqual(self.row("just-installed", report=codex)["layer"], rows.TRIAL)
         self.assertNotEqual(self.row("copywriting", report=codex)["layer"], rows.TRIAL)
         self.assertFalse(any(r["name"] == "skill-creator" for r in codex["rows"]))
         text = render.inventory_markdown(codex)
         self.assertIn("| 序号 | Skill | 功能 |", text)
         self.assertIn("## 实验区", text)
-        self.assertIn("建议：删除", text)
         self.assertNotIn("第 1 条", text)
+
+    def test_long_idle_is_flagged_but_not_suggested_for_deletion(self) -> None:
+        codex = self.agent_report(sources.CODEX)
+        old = self.row("old-tool", report=codex)
+        self.assertNotEqual(old["layer"], rows.TRIAL)
+        self.assertNotIn("删", old["suggestions"])
+        self.assertIn("留着没问题", " ".join(old["notes"]))
+        self.assertIn("很久没用", render.advice_markdown(codex))
+
+    def test_duplicate_group_recommends_one_keeper_and_explains_the_rest(self) -> None:
+        text = "Explore intent, requirements and design before any creative implementation work"
+        keep = write_skill(self.home / ".codex/skills/brainstorm", "brainstorm", text)
+        drop = write_skill(self.home / ".codex/skills/superpowers-brainstorm", "superpowers-brainstorm", text)
+        sessions = self.home / ".codex/sessions/2026/02/02"
+        jsonl(sessions / "rollout-bs.jsonl", [codex_read(keep, ts(10))])
+        codex = self.agent_report(sources.CODEX)
+        kept, dropped = self.row("brainstorm", report=codex), self.row("superpowers-brainstorm", report=codex)
+        self.assertNotIn("删", kept["suggestions"])
+        self.assertIn("建议：保留这份", " ".join(kept["notes"]))
+        self.assertIn("删", dropped["suggestions"])
+        note = " ".join(dropped["notes"])
+        self.assertIn(f"保留第 {kept['no']} 行 brainstorm", note)
+        self.assertIn("名字只差一个前缀", note)
+        self.assertIn("用得最多", note)
+        self.assertIn("功能不会少", note)
+        self.assertNotIn("留着没问题", note)
+        self.assertIn("功能重复，多选一", render.advice_markdown(codex))
+        self.assertTrue(drop.exists(), "advice alone must never delete anything")
+
+    def test_similar_skills_with_different_focus_are_never_pick_one(self) -> None:
+        write_skill(self.home / ".codex/skills/ian-style", "ian-style", "生成 Ian 风格的中文正文配图，用于文章、帖子、博客、方法论和流程说明")
+        write_skill(self.home / ".codex/skills/yoyo-style", "yoyo-style", "生成 Yoyo 风格的中文正文配图，用于文章、帖子、博客、方法论和流程说明")
+        codex = self.agent_report(sources.CODEX)
+        for name in ("ian-style", "yoyo-style"):
+            row = self.row(name, report=codex)
+            self.assertNotIn("删", row["suggestions"])
+            self.assertIn("🔀", " ".join(row["notes"]))
+        self.assertFalse(any(i["kind"] == "duplicate" for i in codex["items"]))
+
+    def test_identical_copies_name_their_locations(self) -> None:
+        write_skill(self.home / ".agents/skills/copywriting", "copywriting", "Write marketing copy")
+        codex = self.agent_report(sources.CODEX)
+        notes = [" ".join(r["notes"]) for r in codex["rows"] if r["name"] == "copywriting"]
+        self.assertTrue(any("两份内容完全一样" in n and "Codex 用户目录那份" in n for n in notes), notes)
 
     def test_layer_override_is_remembered(self) -> None:
         codex = self.agent_report(sources.CODEX)
@@ -323,6 +378,35 @@ class StewardTestCase(unittest.TestCase):
         note = " ".join(self.row("comps", report=claude)["notes"])
         self.assertIn(f"和第 {plugin['no']} 行插件 finance 里的 comps 重名", note)
 
+    def test_install_date_ignores_old_file_times_from_copies(self) -> None:
+        mock.patch.stopall()
+        folder = self.home / ".workbuddy/skills/fresh-copy"
+        folder.mkdir(parents=True)
+        skill_md = folder / "SKILL.md"
+        skill_md.write_text("---\nname: fresh-copy\ndescription: copied\n---\n", encoding="utf-8")
+        old = (dt.datetime.now() - dt.timedelta(days=120)).timestamp()
+        os.utime(skill_md, (old, old))
+        self.assertEqual(sources._installed_at(folder), dt.date.today().isoformat())
+
+    def test_missing_pyyaml_stops_with_a_clear_message(self) -> None:
+        import builtins
+        import contextlib
+        import io
+        sys.path.insert(0, str(PLUGIN_ROOT / "scripts"))
+        import darwin as cli
+
+        real_import = builtins.__import__
+
+        def no_yaml(name, *args, **kwargs):
+            if name == "yaml":
+                raise ImportError("no yaml")
+            return real_import(name, *args, **kwargs)
+
+        errors = io.StringIO()
+        with mock.patch("builtins.__import__", no_yaml), contextlib.redirect_stderr(errors):
+            self.assertEqual(cli.main(["--agent", "codex", "inventory"]), 2)
+        self.assertIn("PyYAML", errors.getvalue())
+
     def test_summary_cache_round_trip(self) -> None:
         from steward import summaries
 
@@ -337,6 +421,7 @@ class StewardTestCase(unittest.TestCase):
         self.assertEqual(summaries.fallback(""), "（没有写简介）")
 
     def test_checkup_reports_changes_and_asks_about_trial(self) -> None:
+        write_skill(self.home / ".codex/skills/trial-one", "trial-one", "Something to try", age_days=3)
         codex = self.agent_report(sources.CODEX)
         text = render.checkup_markdown(codex, codex)
         self.assertIn("没有新变化", text)

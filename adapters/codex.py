@@ -128,10 +128,10 @@ def classify_location(
         runtime_targets = ["codex"]
     elif discovery_root == agents_user or _is_relative_to(folder, agents_user):
         origin, scope, deployment_id = "SHARED_USER", "user", "agents_shared"
-        runtime_targets = ["codex", "workbuddy"]
+        runtime_targets = ["codex"]
     elif ".agents" in {part.lower() for part in discovery_root.parts}:
         origin, scope, deployment_id = "PROJECT", "project", f"agents_project:{discovery_root}"
-        runtime_targets = ["codex", "workbuddy"]
+        runtime_targets = ["codex"]
     else:
         origin, scope, deployment_id = "CODEX_USER", "user", f"codex_explicit:{discovery_root}"
         runtime_targets = ["codex"]

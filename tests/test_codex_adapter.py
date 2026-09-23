@@ -53,7 +53,7 @@ class CodexAdapterTestCase(unittest.TestCase):
             self.assertEqual(by_name["shared"].metadata["scope"], "user")
             self.assertEqual(by_name["shared"].runtime_id, "codex")
             self.assertEqual(by_name["shared"].metadata["deployment_id"], "agents_shared")
-            self.assertIn("workbuddy", by_name["shared"].metadata["runtime_targets"])
+            self.assertEqual(by_name["shared"].metadata["runtime_targets"], ["codex"])
             self.assertEqual(by_name["project"].origin, "PROJECT")
             self.assertEqual(by_name["project"].metadata["scope"], "project")
 

@@ -14,7 +14,10 @@ import os
 from pathlib import Path
 from typing import Any
 
+import datetime as dt
+
 from . import summaries
+from .advisor import MIN_OBSERVED_DAYS as NEW_INSTALL_DAYS
 from .sources import BUILTIN, PLUGIN, USER
 
 RESIDENT = "常驻"
@@ -24,7 +27,7 @@ LAYERS = (RESIDENT, WORKFLOW, TRIAL)
 LAYER_MEANING = {
     RESIDENT: "高频、通用的基础能力",
     WORKFLOW: "你反复做的具体任务",
-    TRIAL: "新装的、没用起来的，先观察再决定去留",
+    TRIAL: "新装不满 30 天、还没用过的，先观察再决定去留",
 }
 
 PROBLEM_TEXT = [
@@ -88,11 +91,18 @@ def save_override(home: Path, agent: str, row: dict[str, Any], layer: str) -> No
     os.replace(temp, home / "layers.json")
 
 
+def _days_since(day: str) -> int:
+    try:
+        return (dt.date.today() - dt.date.fromisoformat(day)).days
+    except ValueError:
+        return 10**6
+
+
 def _layer(row: dict[str, Any], kind_hint: str | None, override: str | None) -> tuple[str, str]:
     if override:
         return override, "你指定的"
-    if row["uses"] == 0:
-        return TRIAL, "没用过"
+    if not row["uses"] and row["uses"] is not None and _days_since(row.get("installed_at", "")) < NEW_INSTALL_DAYS:
+        return TRIAL, "新装还没用过"
     hint = kind_hint if kind_hint in (RESIDENT, WORKFLOW) else WORKFLOW
     return hint, ("无法统计使用，按用途分" if row["uses"] is None else "按用途分")
 
@@ -118,6 +128,7 @@ def build_rows(report: dict[str, Any], cache: dict[str, Any], overrides: dict[st
             "last_used": skill["last_used"],
             "rework": skill.get("rework", 0),
             "problems": skill["problems"],
+            "installed_at": skill.get("installed_at", ""),
             "tree_sha256": skill.get("tree_sha256", ""),
             "stat_sig": stat_signature(Path(skill["path"])) if Path(skill["path"]).is_dir() else "",
         }
@@ -147,6 +158,7 @@ def build_rows(report: dict[str, Any], cache: dict[str, Any], overrides: dict[st
             "last_used": max((m["last_used"] for m in members), default=""),
             "rework": 0,
             "problems": [],
+            "installed_at": min((m.get("installed_at") or "9999" for m in members), default=""),
         }
         row["layer"], row["layer_reason"] = _layer(row, hint, overrides.get(_override_key(row["agent"], row)))
         rows.append(row)
@@ -156,6 +168,11 @@ def build_rows(report: dict[str, Any], cache: dict[str, Any], overrides: dict[st
         row["no"] = number
     _attach_notes(rows, report)
     return rows
+
+
+def _plugin_wins(plugin: dict[str, Any], skill: dict[str, Any]) -> bool:
+    """Keep the user's own copy unless the plugin copy is clearly the one in use."""
+    return (plugin["uses"] or 0) > (skill["uses"] or 0)
 
 
 def finalize(report: dict[str, Any], store: Path) -> dict[str, Any]:
@@ -188,13 +205,28 @@ def _attach_notes(rows: list[dict[str, Any]], report: dict[str, Any]) -> None:
         if "optimize" in kinds:
             notes.append(f"🔧 用完后有 {row['rework']} 次你提了修改意见（疑似返工）。建议：优化（按你的反馈改进）")
             suggestions.append("优化")
-        if "delete" in kinds:
-            notes.append(f"💤 装了 {kinds['delete'].get('observed_days', '')} 天一次都没用过。建议：删除（进回收站，能恢复）")
-            suggestions.append("删")
-        if "uninstall_plugin" in kinds:
-            days = kinds["uninstall_plugin"].get("observed_days", "")
-            notes.append(f"💤 装了 {days} 天，里面的 Skill 一次都没用过。建议：卸载（需要在 Agent 里手动操作，我给步骤）")
-            suggestions.append("删")
+        if "duplicate" in kinds and row["kind"] == "skill":
+            item = kinds["duplicate"]
+            group = [by_path[t["path"]] for t in item["targets"] if t["path"] in by_path]
+            keeper = by_path.get(item["keeper_path"])
+            if keeper is row:
+                others = "、".join(f"第 {r['no']} 行" for r in group if r is not row)
+                notes.append(f"👯 和{others}是重复的，多选一。建议：保留这份（{item['keeper_reason']}），其他的可以删")
+            elif keeper:
+                notes.append(
+                    f"👯 {item['member_reasons'][row['path']]}。建议：删除，保留第 {keeper['no']} 行 {keeper['name']}（{item['keeper_reason']}）"
+                )
+                suggestions.append("删")
+        if "idle" in kinds and "删" not in suggestions:
+            item = kinds["idle"]
+            caveat = "本机对话记录较少，仅供参考；" if item.get("few_records") else ""
+            notes.append(
+                f"💤 装了 {item.get('observed_days', '')} 天没用过。{caveat}如果是偶尔才用的专项工具（比如一年用几次的分析），留着没问题；确定用不上再删"
+            )
+        if "idle_plugin" in kinds:
+            notes.append(
+                f"💤 装了 {kinds['idle_plugin'].get('observed_days', '')} 天，里面的 Skill 一次都没用过。偶尔才用的话可以留着；确定不用可以卸载（我给步骤）"
+            )
         if "align" in kinds and row["kind"] == "skill":
             item = kinds["align"]
             copies = [by_path[t["path"]] for t in item["targets"] if t["path"] in by_path]
@@ -211,12 +243,22 @@ def _attach_notes(rows: list[dict[str, Any]], report: dict[str, Any]) -> None:
                 continue
             other = next((t for t in item["targets"] if t["path"] not in row["paths"]), None)
             if other and other["path"] in by_path:
-                notes.append(f"🔀 和第 {by_path[other['path']]['no']} 行 {other['name']} 的简介很像，{row['agent']} 可能选错。建议：优化（改写简介，分清用途）")
+                notes.append(f"🔀 和第 {by_path[other['path']]['no']} 行 {other['name']} 的简介很像，{row['agent']} 可能选错。建议：优化（改写简介分清用途；如果是一套配合使用的 Skill，也可以加一个总入口负责分派）")
                 suggestions.append("优化")
         if row["kind"] == "skill":
             for plugin in plugin_rows:
                 if row["name"] in plugin["members"]:
-                    notes.append(f"👯 和第 {plugin['no']} 行插件 {plugin['plugin']} 里的 {row['name']} 重名，{row['agent']} 里会出现两个。建议：只留一个")
+                    if _plugin_wins(plugin, row):
+                        notes.append(
+                            f"👯 和第 {plugin['no']} 行插件 {plugin['plugin']} 里的 {row['name']} 重名，{row['agent']} 里会出现两个。"
+                            f"建议：删除这个，保留插件那份（插件那份用得更多）"
+                        )
+                        suggestions.append("删")
+                    else:
+                        notes.append(
+                            f"👯 和第 {plugin['no']} 行插件 {plugin['plugin']} 里的 {row['name']} 重名，{row['agent']} 里会出现两个。"
+                            f"建议：保留这个（你自己装的，能自己修改），插件那份可以去掉"
+                        )
         else:
             overlaps = [other for other in plugin_rows if other is not row and set(row["members"]) & set(other["members"])]
             if overlaps:
@@ -227,8 +269,14 @@ def _attach_notes(rows: list[dict[str, Any]], report: dict[str, Any]) -> None:
                 )
             twins = [other for other in rows if other["kind"] == "skill" and other["name"] in row["members"]]
             for twin in twins:
-                notes.append(f"👯 里面的 {twin['name']} 和第 {twin['no']} 行你自己装的重名，{row['agent']} 里会出现两个。建议：只留一个")
+                if _plugin_wins(row, twin):
+                    notes.append(f"👯 里面的 {twin['name']} 和第 {twin['no']} 行你自己装的重名。建议：保留插件这份（用得更多），删掉第 {twin['no']} 行")
+                else:
+                    notes.append(f"👯 里面的 {twin['name']} 和第 {twin['no']} 行你自己装的重名，{row['agent']} 里会出现两个。建议：保留第 {twin['no']} 行那份")
+                    if set(row["members"]) <= {t["name"] for t in twins}:
+                        notes[-1] += "；这个插件的内容你都另有一份，可以卸载（我给步骤）"
+                        suggestions.append("删")
         if not notes and row["uses"] == 0:
-            notes.append("还没用过，装的时间不长，先观察")
+            notes.append("新装不久，还没用过，先观察")
         row["notes"] = notes
         row["suggestions"] = list(dict.fromkeys(suggestions))
