@@ -24,6 +24,16 @@ The suite verifies:
 - archive planning fails until the target runtime dependency is explicitly marked `NOT_REQUIRED`;
 - archive execution fails without exact approval;
 - changed targets invalidate approval;
+- content changed after the runtime dependency release blocks archive planning until a rescan and re-confirmation;
+- archive approvals bind the runtime, deployment, and runtime targets of the exact copy;
+- archived copies are excluded from duplicate and replacement evidence for live Skills;
+- candidate packaging refuses destinations inside the live Skill tree;
+- the Skill steward discovers Codex, Claude Code, WorkBuddy, and Doubao Skills with their source (built-in, plugin, or user-installed);
+- steward usage counts real use only: Codex SKILL.md reads and explicit picks, Claude Skill calls and slash commands, and the WorkBuddy usage log. System-prompt listings and Skill edits are excluded;
+- steward advice numbers every delete, optimize, align, and collision item, and each item carries a reason;
+- steward delete moves only unchanged user-installed Skills into a recycle bin and can restore them; built-in, plugin, linked, and out-of-root Skills are refused;
+- steward optimization edits a draft, shows the diff, and replaces the live Skill only through a separate apply step;
+- steward checkup reports only changes since the previous report;
 - archive is reversible;
 - no permanent delete command exists;
 - candidate preparation leaves the live Skill unchanged;
