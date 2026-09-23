@@ -319,7 +319,10 @@ def build_report(data_dir: Path) -> dict[str, Any]:
     events = iter_events(data_dir)
     skills = registry.get("skills", [])
     name_counts = collections.Counter(item["skill_id"] for item in skills)
-    overlaps = overlap_map(skills, float(thresholds["overlap_threshold"]))
+    # An archived copy is no longer deployed, so it can be neither a duplicate
+    # of nor a replacement for a live Skill.
+    live_skills = [item for item in skills if item.get("status") != "ARCHIVED"]
+    overlaps = overlap_map(live_skills, float(thresholds["overlap_threshold"]))
     now = dt.datetime.now(dt.timezone.utc)
     results = []
     skill_by_record = {item["record_id"]: item for item in skills}

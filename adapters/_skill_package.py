@@ -113,16 +113,21 @@ def _safe_files(source: Path) -> Iterable[tuple[Path, Path]]:
         yield resolved, relative
 
 
+def _package_output(source: Path, destination: str, default_name: str) -> Path:
+    output = Path(destination).expanduser().resolve()
+    if output.suffix.lower() != ".zip":
+        output = output / default_name
+    if output == source or source in output.parents:
+        raise ValueError(f"Package destination must not be inside the Skill being packaged: {source}")
+    output.parent.mkdir(parents=True, exist_ok=True)
+    return output
+
+
 def package_skill_zip(asset: RuntimeAsset, destination: str, *, root_name: str | None = None) -> dict[str, str]:
     source = Path(asset.path).resolve()
     if not (source / "SKILL.md").is_file():
         raise ValueError(f"Skill has no SKILL.md: {source}")
-    output = Path(destination).expanduser().resolve()
-    if output.suffix.lower() != ".zip":
-        output.mkdir(parents=True, exist_ok=True)
-        output = output / f"{source.name}.zip"
-    else:
-        output.parent.mkdir(parents=True, exist_ok=True)
+    output = _package_output(source, destination, f"{source.name}.zip")
     prefix = root_name or source.name
     with zipfile.ZipFile(output, "w", compression=zipfile.ZIP_DEFLATED) as archive:
         for path, relative in _safe_files(source):
@@ -140,12 +145,7 @@ def package_claude_plugin(asset: RuntimeAsset, destination: str, *, surface: str
     source = Path(asset.path).resolve()
     if not (source / "SKILL.md").is_file():
         raise ValueError(f"Skill has no SKILL.md: {source}")
-    output = Path(destination).expanduser().resolve()
-    if output.suffix.lower() != ".zip":
-        output.mkdir(parents=True, exist_ok=True)
-        output = output / f"darwin-{source.name}-{surface}.zip"
-    else:
-        output.parent.mkdir(parents=True, exist_ok=True)
+    output = _package_output(source, destination, f"darwin-{source.name}-{surface}.zip")
     manifest = {
         "name": f"darwin-{source.name}",
         "version": "0.1.0",

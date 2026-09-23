@@ -72,7 +72,20 @@ def ensure_archivable(
     lower_parts = {part.lower() for part in resolved.parts}
     if ".system" in lower_parts or ("plugins" in lower_parts and "cache" in lower_parts):
         raise SystemExit("System and plugin-bundled paths are always protected.")
+    if require_runtime_release and tree_sha256(resolved) != skill.get("tree_sha256"):
+        raise SystemExit(
+            "Skill content changed since the runtime dependency was released. "
+            "Run registry.py scan and re-confirm the runtime dependency for the current content."
+        )
     return resolved
+
+
+def deployment_binding(skill: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "runtime_id": skill.get("runtime_id"),
+        "deployment_id": skill.get("deployment_id"),
+        "runtime_targets": sorted(skill.get("runtime_targets") or []),
+    }
 
 
 def create_approval(data_dir: Path, value: dict[str, Any]) -> dict[str, Any]:
@@ -124,6 +137,7 @@ def archive_plan(data_dir: Path, skill_name: str, skill_path: str | None) -> dic
             "source_path": str(source),
             "destination_path": str(destination),
             "target_tree_sha256": tree_sha256(source),
+            **deployment_binding(skill),
             "required_approval_text": phrase,
         },
     )
@@ -136,6 +150,7 @@ def archive_plan(data_dir: Path, skill_name: str, skill_path: str | None) -> dic
         "approval_id": approval["approval_id"],
         "action": "ARCHIVE",
         "skill": {"name": skill["skill_id"], "description": skill.get("description", ""), "path": str(source)},
+        **deployment_binding(skill),
         "destination": str(destination),
         "target_tree_sha256": approval["target_tree_sha256"],
         "rollback": "Use plan-restore and restore with a separate explicit approval.",
@@ -157,6 +172,9 @@ def archive_execute(data_dir: Path, approval_id: str, approval_text: str) -> dic
     source = ensure_archivable(skill, registry)
     if os.path.normcase(str(source)) != os.path.normcase(str(Path(approval["source_path"]).resolve())):
         raise SystemExit("Target path changed after approval.")
+    binding = deployment_binding(skill)
+    if any(approval.get(key) != value for key, value in binding.items()):
+        raise SystemExit("Target runtime or deployment changed after approval; create a new plan.")
     if tree_sha256(source) != approval["target_tree_sha256"]:
         raise SystemExit("Target content changed after approval; create a new plan.")
     destination = Path(approval["destination_path"]).resolve()
