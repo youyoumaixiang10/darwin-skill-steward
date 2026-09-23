@@ -1,4 +1,4 @@
-# Darwin v0.3.1 evidence model
+# Darwin evidence model
 
 ## Evidence lanes
 

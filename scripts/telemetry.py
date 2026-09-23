@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Local telemetry storage for Darwin v0.3.1.
+"""Local telemetry storage for Darwin Skill Steward.
 
 The module deliberately separates event metadata from short-lived text evidence.
 It uses only the Python standard library so Hook execution has no package setup.
@@ -23,6 +23,7 @@ from typing import Any, Iterable
 
 
 SCHEMA_VERSION = 1
+# Kept from the original project name so existing installs keep their data directory.
 PLUGIN_ID = "darwin-for-codex"
 OUTCOMES = {"POSITIVE", "REFINEMENT", "FAILURE", "UNKNOWN"}
 ATTRIBUTION_SOURCES = {

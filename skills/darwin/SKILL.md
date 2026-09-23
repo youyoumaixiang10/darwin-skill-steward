@@ -81,7 +81,7 @@ python scripts/darwin.py advise
 
 # 高级：受控进化与归档
 
-Darwin v0.3.1 is a controlled cross-Agent Skill evolution system. Its operating loop is:
+Darwin is a controlled cross-Agent Skill evolution system. Its operating loop is:
 
 `Observe -> Diagnose -> Candidate -> Validate -> Human Approve -> Promote or Roll Back`
 

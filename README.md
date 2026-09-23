@@ -1,4 +1,4 @@
-# Darwin v0.3.1
+# Darwin Skill Steward v0.4.0
 
 ## 快速使用：Skill 管家
 
@@ -51,7 +51,7 @@ The manifest intentionally omits a `hooks` field because the documented default 
 ## Project layout
 
 ```text
-darwin-for-codex/
+darwin-skill-steward/
 ├── .codex-plugin/plugin.json
 ├── hooks/hooks.json
 ├── skills/darwin/
