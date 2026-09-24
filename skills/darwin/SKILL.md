@@ -121,7 +121,7 @@ It may recommend `KEEP`, `OBSERVE`, `ARCHIVE`, `MERGE`, or `EVOLVE`. Evolution e
 - Use `scripts/runtime.py` for non-Codex discovery, candidate packaging, and reviewed import plans.
 - Claude Code discovery covers user and project `.claude/skills` roots. Candidate packages use the documented Claude plugin structure. Claude Code Hook events remain turn evidence only.
 - Claude Cowork accepts a reviewed custom plugin ZIP. Discovery requires an explicit exported Skill root because Cowork does not expose a stable local installed-plugin directory to Darwin.
-- WorkBuddy discovery covers `.agents/skills`; packaging enforces its documented `SKILL.md` metadata and produces an uploadable ZIP.
+- WorkBuddy discovery covers `.workbuddy/skills` (`~/.agents/skills` is read by Codex, not WorkBuddy); packaging enforces its documented `SKILL.md` metadata and produces an uploadable ZIP.
 - Doubao discovery requires an explicit exported Skill root. Darwin produces a reviewed ZIP and manual client import plan because no stable public automatic-install or invocation telemetry interface has been verified.
 - A manual import plan is not proof of installation. Record promotion success only after the user verifies the native Skill in the target runtime.
 

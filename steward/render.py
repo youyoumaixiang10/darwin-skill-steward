@@ -95,8 +95,14 @@ def advice_markdown(report: dict[str, Any]) -> str:
     out += ["依据：", *coverage_lines(report), "", "序号和盘点表一致。", ""]
     deletes = [row for row in rows if "删" in row["suggestions"]]
     fixes = [row for row in rows if {"优化", "对齐"} & set(row["suggestions"])]
-    keep = [row for row in rows if not row["suggestions"]]
-    for title, group in (("🗑 建议删除 / 卸载", deletes), ("🔧 建议优化", fixes)):
+    idle = [row for row in rows if not row["suggestions"] and any(note.startswith("💤") for note in row["notes"])]
+    keep = [row for row in rows if not row["suggestions"] and row not in idle]
+    sections = (
+        ("🗑 建议删除（功能重复，多选一；删不删你定）", deletes),
+        ("🔧 建议优化", fixes),
+        ("💤 很久没用（没有替代品，留不留你定）", idle),
+    )
+    for title, group in sections:
         out += [f"## {title}（{len(group)} 个）", ""]
         if not group:
             out += ["没有。", ""]

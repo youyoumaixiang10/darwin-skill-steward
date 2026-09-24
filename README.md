@@ -31,7 +31,7 @@ Darwin separates runtime-independent governance from Agent-specific adapters. `d
 - **Codex:** full existing governance, observation, approval, promotion, and rollback workflow.
 - **Claude Code:** discovers user/project Skills, translates Hook turn events, and packages candidates as Claude plugins.
 - **Claude Cowork:** packages candidates as uploadable custom plugins and produces a reviewed manual installation plan.
-- **WorkBuddy:** discovers `.agents/skills`, validates documented metadata, packages a Skill ZIP, and produces a reviewed upload plan.
+- **WorkBuddy:** discovers `.workbuddy/skills` (user and project; `~/.agents/skills` belongs to Codex), validates documented metadata, packages a Skill ZIP, and produces a reviewed upload plan.
 - **Doubao client:** scans only user-selected exports, produces a candidate ZIP, and prepares a manual upload plan. Automatic installation and runtime telemetry remain unavailable until a stable public interface is verified.
 
 Use `scripts/runtime.py` to list assets, package candidates, and generate platform-specific import plans. See the exact capability levels in [the runtime capability matrix](docs/runtime-capability-matrix.md).

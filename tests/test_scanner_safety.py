@@ -235,7 +235,7 @@ class DuplicateSafetyTestCase(unittest.TestCase):
         self.assertEqual(by_name["code"]["runtime_id"], "codex")
         self.assertEqual(by_name["shared"]["runtime_id"], "codex")
         self.assertEqual(by_name["shared"]["deployment_id"], "agents_shared")
-        self.assertIn("workbuddy", by_name["shared"]["runtime_targets"])
+        self.assertEqual(by_name["shared"]["runtime_targets"], ["codex"])
         self.assertEqual(by_name["project"]["scope"], "project")
         self.assertEqual(by_name["shared"]["origin"], "SHARED_USER")
         self.assertTrue(by_name["code"]["runtime_unique_copy"])

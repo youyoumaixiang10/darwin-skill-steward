@@ -12,14 +12,19 @@ class WorkBuddyAdapterTestCase(unittest.TestCase):
     def test_discovers_and_packages_standard_skill_zip(self) -> None:
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)
-            skill = root / ".agents" / "skills" / "writer"
+            skill = root / ".workbuddy" / "skills" / "writer"
+            shared = root / ".agents" / "skills" / "codex-only"
+            shared.mkdir(parents=True)
+            (shared / "SKILL.md").write_text("---\nname: codex-only\ndescription: x\n---\n", encoding="utf-8")
             skill.mkdir(parents=True)
             (skill / "SKILL.md").write_text(
                 "---\nname: writer\ndescription: Writer\ndescription_zh: 写作\ndescription_en: Writer\nversion: 1.0.0\nauthor: Test\n---\n",
                 encoding="utf-8",
             )
             adapter = WorkBuddyAdapter(home=root, cwd=root)
-            asset = next(iter(adapter.discover_assets()))
+            assets = list(adapter.discover_assets())
+            self.assertEqual([a.native_id for a in assets], ["writer"])
+            asset = assets[0]
             package = adapter.package_candidate(asset, str(root / "out"))
             with zipfile.ZipFile(package["package_path"]) as archive:
                 self.assertIn("writer/SKILL.md", archive.namelist())

@@ -30,7 +30,9 @@ class WorkBuddyAdapter(RuntimeAdapter):
     def discovery_roots(self) -> list[Path]:
         if self._explicit_roots is not None:
             return unique_roots(self._explicit_roots)
-        return skill_roots(self.home, self.cwd, (".agents", "skills"))
+        # WorkBuddy loads Skills from ~/.workbuddy/skills (and project .workbuddy/skills),
+        # not from the shared ~/.agents/skills folder that Codex reads.
+        return skill_roots(self.home, self.cwd, (".workbuddy", "skills"))
 
     def discover_assets(self) -> Iterable[RuntimeAsset]:
         return discover_skills(self.runtime_id, self.discovery_roots(), origin="user")
